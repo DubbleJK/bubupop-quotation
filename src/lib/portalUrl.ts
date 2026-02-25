@@ -9,7 +9,7 @@ const ENV_URL =
     : "";
 
 const DEFAULT_DEV = "http://localhost:3001";
-const DEFAULT_PROD = "https://bubupop-portal-git-main-dubblejks-projects.vercel.app";
+const DEFAULT_PROD = "https://bubupop-portal.vercel.app";
 
 export const PORTAL_URL =
   ENV_URL !== "" ? ENV_URL : process.env.NODE_ENV === "development" ? DEFAULT_DEV : DEFAULT_PROD;
