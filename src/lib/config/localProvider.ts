@@ -30,12 +30,15 @@ function getFileConfig(): AppConfig {
       tshirtTypes: tshirtTypes.map((t) => ({ id: t.id, label: t.label, unitPrice: t.unitPrice })),
       tshirtSizeUpPer2XL,
       tshirtDiscountTiers: tshirtDiscountTiers.map((t) => ({ minQty: t.minQty, rate: t.rate })),
-      businessCardOptions: businessCardOptions.map((o) => ({
-        id: o.id,
-        label: o.label,
-        prices: { ...o.prices },
-        note: o.note,
-      })),
+      businessCardOptions: businessCardOptions.map((o) => {
+        const item: { id: string; label: string; prices: Record<number, number>; note?: string } = {
+          id: o.id,
+          label: o.label,
+          prices: { ...o.prices },
+        };
+        if ("note" in o && o.note !== undefined) item.note = o.note;
+        return item;
+      }),
       businessCardDesignTiers: businessCardDesignTiers.map((t) => ({
         id: t.id,
         label: t.label,

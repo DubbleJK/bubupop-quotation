@@ -1,0 +1,15 @@
+quotation-app 원격(origin) 주소 수정 후 푸시하기
+============================================
+
+1. 아래 명령어를 한 줄씩 입력하세요 (명령 프롬프트에서).
+
+cd C:\Users\USER\quotation-app
+
+git remote set-url origin https://github.com/DubbleJK/bubupop-quotation.git
+
+git push -u origin main
+
+
+2. GitHub에 bubupop-quotation 저장소가 아직 없다면:
+   - https://github.com/new 에서 Repository name: bubupop-quotation 으로 만들어 준 뒤
+   - 위 push 를 다시 실행하세요.
