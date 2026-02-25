@@ -1,0 +1,9 @@
+{
+  "name": "내부 견적 앱",
+  "short_name": "견적",
+  "description": "직원용 견적 계산",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#2563eb"
+}
