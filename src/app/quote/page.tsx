@@ -13,6 +13,7 @@ import { DtfForm } from "@/components/forms/DtfForm";
 import { TshirtForm } from "@/components/forms/TshirtForm";
 import { BusinessCardForm } from "@/components/forms/BusinessCardForm";
 import { BannerForm } from "@/components/forms/BannerForm";
+import { PORTAL_URL } from "@/lib/portalUrl";
 
 const emptySummary: SummaryPayload = {
   mainValue: undefined,
@@ -20,12 +21,6 @@ const emptySummary: SummaryPayload = {
   items: [],
   error: undefined,
 };
-
-/** 부부계산 포털 URL (환경 변수 없으면 로컬 포털 기본값) */
-const PORTAL_URL =
-  typeof process.env.NEXT_PUBLIC_PORTAL_URL === "string" && process.env.NEXT_PUBLIC_PORTAL_URL !== ""
-    ? process.env.NEXT_PUBLIC_PORTAL_URL
-    : "http://localhost:3001";
 
 /**
  * 일반 페이지: 견적 계산만 가능 (마인드맵 기준)
@@ -63,9 +58,9 @@ export default function QuotePage() {
           href={PORTAL_URL}
           target="_self"
           rel="noopener noreferrer"
-          className="text-slate-600 hover:text-slate-800 text-sm"
+          className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-slate-700 text-white hover:bg-slate-800 transition-colors shadow-sm"
         >
-          홈으로 가기 (부부계산 포털)
+          HOME
         </a>
         <h1 className="text-xl font-semibold text-slate-800">견적 계산</h1>
         <span className="w-14" />

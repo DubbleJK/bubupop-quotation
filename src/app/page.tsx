@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { configProvider } from "@/lib/config";
 import type { AppConfig } from "@/lib/config";
 import { ADMIN_SESSION_KEY } from "@/lib/config/storageKeys";
+import { PORTAL_URL } from "@/lib/portalUrl";
 
 /**
  * 첫 화면 (마인드맵 기준)
@@ -19,10 +20,6 @@ export default function Home() {
   const [adminError, setAdminError] = useState("");
   const [mounted, setMounted] = useState(false);
 
-  const portalUrl =
-    typeof process.env.NEXT_PUBLIC_PORTAL_URL === "string" && process.env.NEXT_PUBLIC_PORTAL_URL !== ""
-      ? process.env.NEXT_PUBLIC_PORTAL_URL
-      : "http://localhost:3001";
 
   useEffect(() => {
     setMounted(true);
@@ -65,12 +62,12 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4 relative">
       <a
-        href={portalUrl}
+        href={PORTAL_URL}
         target="_self"
         rel="noopener noreferrer"
-        className="absolute top-4 left-4 text-slate-600 hover:text-slate-800 text-sm"
+        className="absolute top-4 left-4 inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-slate-700 text-white hover:bg-slate-800 transition-colors shadow-sm"
       >
-        홈으로 가기 (부부계산 포털)
+        HOME
       </a>
       <h1 className="text-2xl font-bold text-slate-800 mb-8">인쇄 견적 · 주문</h1>
 
