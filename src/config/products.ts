@@ -3,8 +3,8 @@
  */
 export const products = [
   { id: "pop", label: "POP" },
-  { id: "sticker-sheet", label: "스티커 (시트형 A4/A3)" },
-  { id: "sticker-solvent", label: "스티커 (솔벤트 롤)" },
+  { id: "sticker-sheet", label: "스티커 시트" },
+  { id: "sticker-solvent", label: "스티커 솔벤트" },
   { id: "dtf", label: "DTF" },
   { id: "tshirt", label: "티셔츠" },
   { id: "business-card", label: "명함" },
