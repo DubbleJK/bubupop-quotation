@@ -20,7 +20,7 @@ export async function GET() {
     const raw = await kv.get<string>(KV_KEY);
     if (!raw) return NextResponse.json(null, { status: 404 });
     const config = typeof raw === "string" ? (JSON.parse(raw) as AppConfig) : raw;
-    if (!config?.settings?.products) return NextResponse.json(null, { status: 404 });
+    if (!config?.settings || !config?.products) return NextResponse.json(null, { status: 404 });
     return NextResponse.json(config);
   } catch {
     return NextResponse.json(null, { status: 404 });
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { pin?: string; config?: AppConfig };
     const { pin, config } = body;
-    if (!config?.settings?.products) return NextResponse.json({ error: "Invalid config" }, { status: 400 });
+    if (!config?.settings || !config?.products) return NextResponse.json({ error: "Invalid config" }, { status: 400 });
 
     const current = await kv.get<string>(KV_KEY);
     const currentConfig = current
