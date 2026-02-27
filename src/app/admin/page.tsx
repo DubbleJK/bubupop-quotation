@@ -27,7 +27,10 @@ export default function AdminPage() {
     if (!mounted) return;
     const session = typeof window !== "undefined" ? localStorage.getItem(ADMIN_SESSION_KEY) : null;
     if (session !== "1") {
-      router.replace("/?admin=1");
+      if (typeof window !== "undefined") {
+        alert("로그인 PIN을 입력하세요.");
+      }
+      router.replace("/");
       return;
     }
     configProvider.getAllConfig().then((c) => {
@@ -36,15 +39,30 @@ export default function AdminPage() {
     });
   }, [mounted, router]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editing || typeof window === "undefined") return;
     try {
+      const pin = editing.settings.loginPin ?? "";
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin, config: editing }),
+      });
+      if (res.status === 401) {
+        alert("PIN이 일치하지 않습니다. 현재 설정된 로그인 PIN을 입력한 상태에서 저장해 주세요.");
+        return;
+      }
+      if (!res.ok && res.status !== 503) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "저장 실패");
+      }
       localStorage.setItem(ADMIN_CONFIG_KEY, JSON.stringify(editing));
       setConfig(editing);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error(e);
+      alert(e instanceof Error ? e.message : "저장 중 오류가 났습니다.");
     }
   };
 

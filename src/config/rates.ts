@@ -2,10 +2,10 @@
  * V1: 스티커 시트·티셔츠·명함·배너 등 단가/옵션 (config provider 통해 사용)
  */
 export const stickerRates = {
-  Art: { a4: 1750, a3: 3500, a3Available: true },
-  Modjo: { a4: 1750, a3: 3500, a3Available: true },
-  Yupo: { a4: 4250, a3: 21250, a3Available: true },
-  TransparentDeadlong: { a4: 4250, a3: 0, a3Available: false },
+  Art: { a4: 500, a3: 980, a3Available: true },
+  Modjo: { a4: 500, a3: 980, a3Available: true },
+  Yupo: { a4: 950, a3: 2100, a3Available: true },
+  TransparentDeadlong: { a4: 950, a3: 0, a3Available: false },
 } as const;
 
 export const stickerSheetSizes = {
@@ -35,7 +35,7 @@ export const businessCardOptions = [
 
 export const businessCardDesignTiers = [
   { id: "output-only", label: "출력만", fee: 0 },
-  { id: "basic", label: "베이직", fee: 10000 },
+  { id: "basic", label: "베이직", fee: 8000 },
   { id: "standard", label: "스탠다드", fee: 20000 },
   { id: "premium", label: "프리미엄", fee: 30000 },
 ] as const;

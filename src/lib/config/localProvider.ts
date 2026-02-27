@@ -48,13 +48,32 @@ function getFileConfig(): AppConfig {
 }
 
 /**
- * V1: 로컬 config 파일을 읽어 AppConfig 반환.
- * 관리자 페이지에서 저장한 설정이 있으면(localStorage) 그것을 우선 사용.
- * V2에서는 apiProvider로 API/DB에서 불러오도록 교체.
+ * V1: 로컬 config + 파일 기본값.
+ * 서버(KV)에 저장된 설정이 있으면 우선 사용 → 기기/재접속 시에도 유지.
+ * 없으면 localStorage, 그다음 코드 기본값.
  */
 export const localProvider: ConfigProvider = {
   async getAllConfig(): Promise<AppConfig> {
     if (typeof window !== "undefined") {
+      try {
+        const res = await fetch("/api/config");
+        if (res.ok) {
+          const parsed = (await res.json()) as AppConfig;
+          if (parsed?.settings && parsed?.products) {
+            parsed.businessCardDesignTiers = ensureOutputOnlyTier(
+              parsed.businessCardDesignTiers ?? []
+            );
+            try {
+              localStorage.setItem(ADMIN_CONFIG_KEY, JSON.stringify(parsed));
+            } catch {
+              // ignore
+            }
+            return parsed;
+          }
+        }
+      } catch {
+        // API 실패 시 아래 localStorage/파일 사용
+      }
       try {
         const saved = localStorage.getItem(ADMIN_CONFIG_KEY);
         if (saved) {
