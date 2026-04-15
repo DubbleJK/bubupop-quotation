@@ -9,6 +9,7 @@ import type { SummaryPayload } from "@/components/StickySummary";
 import { PopForm } from "@/components/forms/PopForm";
 import { StickerSheetForm } from "@/components/forms/StickerSheetForm";
 import { StickerSolventForm } from "@/components/forms/StickerSolventForm";
+import { UvAcrylicKeyringForm } from "@/components/forms/UvAcrylicKeyringForm";
 import { DtfForm } from "@/components/forms/DtfForm";
 import { TshirtForm } from "@/components/forms/TshirtForm";
 import { BusinessCardForm } from "@/components/forms/BusinessCardForm";
@@ -97,6 +98,12 @@ export default function QuotePage() {
                 <StickerSolventForm
                   settings={config.settings}
                   defaultGapMm={config.settings.defaultGapMm}
+                  onReset={handleReset}
+                  onSummaryChange={onSummaryChange}
+                />
+              )}
+              {productId === "uv-acrylic-keyring" && (
+                <UvAcrylicKeyringForm
                   onReset={handleReset}
                   onSummaryChange={onSummaryChange}
                 />
