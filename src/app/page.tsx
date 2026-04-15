@@ -9,7 +9,7 @@ import { ADMIN_SESSION_KEY } from "@/lib/config/storageKeys";
 import { PORTAL_URL } from "@/lib/portalUrl";
 
 const productBtnClass =
-  "flex items-center justify-center rounded-xl border-2 border-slate-200 bg-white px-4 py-4 text-center text-sm font-semibold text-slate-800 shadow-sm transition hover:border-blue-400 hover:bg-blue-50/50 active:scale-[0.99]";
+  "flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-3 text-center text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]";
 
 /**
  * 첫 화면
@@ -56,13 +56,13 @@ export default function Home() {
       >
         HOME
       </a>
-      <h1 className="text-2xl font-bold text-slate-800 mb-2 text-center">인쇄 견적 · 주문</h1>
-      <p className="text-sm text-slate-500 mb-6 text-center max-w-md">견적할 품목을 선택하면 바로 계산 화면으로 이동합니다.</p>
+      <h1 className="text-2xl font-bold text-slate-800 mb-1 text-center">인쇄 견적 · 주문</h1>
+      <p className="text-sm text-slate-500 mb-4 text-center max-w-md">견적할 품목을 선택하면 바로 계산 화면으로 이동합니다.</p>
 
-      <div className="w-full max-w-2xl space-y-8">
-        <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+      <div className="w-full max-w-2xl space-y-5">
+        <section className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-slate-700 mb-3">견적 품목 선택</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {config.products.map((p) => (
               <Link key={p.id} href={`/quote?product=${encodeURIComponent(p.id)}`} className={productBtnClass}>
                 {p.label}
@@ -71,7 +71,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <section className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-slate-700">관리자</h2>
           <p className="text-xs text-slate-500 mt-1 mb-4">원가·마진률 확인 및 수정</p>
 
@@ -79,7 +79,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setAdminLoginOpen(true)}
-              className="w-full bg-slate-700 text-white py-3 rounded-xl text-sm font-semibold hover:bg-slate-800 transition"
+              className="w-full bg-slate-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-700 transition"
             >
               관리자 페이지 로그인
             </button>
@@ -106,13 +106,13 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={closeAdminLogin}
-                  className="flex-1 border border-slate-300 bg-white text-slate-700 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-50"
+                  className="flex-1 border border-slate-300 bg-white text-slate-700 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
                 >
                   취소
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-slate-700 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800"
+                  className="flex-1 bg-slate-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-700"
                 >
                   로그인
                 </button>

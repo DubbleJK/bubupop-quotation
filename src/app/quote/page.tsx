@@ -47,7 +47,7 @@ function QuotePageFallback() {
         <h1 className="text-xl font-semibold text-slate-800">견적 계산</h1>
         <span className="w-14" />
       </header>
-      <main className="max-w-6xl mx-auto p-4 md:p-6">
+      <main className="max-w-6xl mx-auto p-3 md:p-5">
         <p className="text-sm text-slate-500">화면을 불러오는 중…</p>
       </main>
     </div>
@@ -109,13 +109,13 @@ function QuotePageContent() {
         <h1 className="text-xl font-semibold text-slate-800">견적 계산</h1>
         <span className="w-14" />
       </header>
-      <main className="max-w-6xl mx-auto p-4 md:p-6">
-        <div className="mb-6">
+      <main className="max-w-6xl mx-auto p-3 md:p-5">
+        <div className="mb-4">
           <ProductGridPicker products={config.products} value={productId} onChange={handleProductChange} />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 shadow-sm">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5">
               {productId === "pop" && (
                 <PopForm
                   settings={config.settings}
@@ -172,12 +172,14 @@ function QuotePageContent() {
             </div>
           </div>
           <div className="lg:col-span-1">
-            <StickySummary
-              mainValue={summary.mainValue}
-              mainLabel={summary.mainLabel}
-              items={summary.items}
-              error={summary.error}
-            />
+            <div className="lg:sticky lg:top-4">
+              <StickySummary
+                mainValue={summary.mainValue}
+                mainLabel={summary.mainLabel}
+                items={summary.items}
+                error={summary.error}
+              />
+            </div>
           </div>
         </div>
       </main>
