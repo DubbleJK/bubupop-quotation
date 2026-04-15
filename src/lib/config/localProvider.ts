@@ -53,6 +53,10 @@ function getFileConfig(): AppConfig {
  * 없으면 localStorage, 그다음 코드 기본값.
  */
 export const localProvider: ConfigProvider = {
+  getInitialConfig(): AppConfig {
+    return getFileConfig();
+  },
+
   async getAllConfig(): Promise<AppConfig> {
     if (typeof window !== "undefined") {
       try {

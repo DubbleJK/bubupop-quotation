@@ -15,15 +15,9 @@ import { PORTAL_URL } from "@/lib/portalUrl";
  */
 export default function Home() {
   const router = useRouter();
-  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [config, setConfig] = useState<AppConfig>(() => configProvider.getInitialConfig());
   const [adminPin, setAdminPin] = useState("");
   const [adminError, setAdminError] = useState("");
-  const [mounted, setMounted] = useState(false);
-
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     configProvider.getAllConfig().then(setConfig);
@@ -42,22 +36,6 @@ export default function Home() {
       setAdminError("PIN이 올바르지 않습니다.");
     }
   };
-
-  if (!mounted) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100">
-        <p className="text-slate-500">로딩 중...</p>
-      </div>
-    );
-  }
-
-  if (!config) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100">
-        <p className="text-slate-500">설정 로딩 중...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4 relative">

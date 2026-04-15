@@ -28,7 +28,7 @@ const emptySummary: SummaryPayload = {
  * 주문종류 선택 → 가로/세로/사이즈 입력 → 견적 결과
  */
 export default function QuotePage() {
-  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [config, setConfig] = useState<AppConfig>(() => configProvider.getInitialConfig());
   const [productId, setProductId] = useState("pop");
   const [summary, setSummary] = useState<SummaryPayload>(emptySummary);
 
@@ -43,14 +43,6 @@ export default function QuotePage() {
   const handleReset = () => {
     setProductId((id) => id);
   };
-
-  if (!config) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100">
-        <p className="text-slate-500">설정 로딩 중...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-100">
