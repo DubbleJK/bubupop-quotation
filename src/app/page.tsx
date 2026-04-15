@@ -8,16 +8,20 @@ import type { AppConfig } from "@/lib/config";
 import { ADMIN_SESSION_KEY } from "@/lib/config/storageKeys";
 import { PORTAL_URL } from "@/lib/portalUrl";
 
+const productBtnClass =
+  "flex items-center justify-center rounded-xl border-2 border-slate-200 bg-white px-4 py-4 text-center text-sm font-semibold text-slate-800 shadow-sm transition hover:border-blue-400 hover:bg-blue-50/50 active:scale-[0.99]";
+
 /**
- * 첫 화면 (마인드맵 기준)
- * - 주문종류 선택 → 견적 계산 페이지 (일반, 로그인 없음)
- * - 4자리 PIN 로그인 → 관리자 페이지 (원가·마진률 확인 및 수정)
+ * 첫 화면
+ * - 견적 품목을 버튼으로 바로 선택 → /quote?product=
+ * - 관리자: 로그인 버튼 클릭 시 PIN 입력 영역 표시
  */
 export default function Home() {
   const router = useRouter();
   const [config, setConfig] = useState<AppConfig>(() => configProvider.getInitialConfig());
   const [adminPin, setAdminPin] = useState("");
   const [adminError, setAdminError] = useState("");
+  const [adminLoginOpen, setAdminLoginOpen] = useState(false);
 
   useEffect(() => {
     configProvider.getAllConfig().then(setConfig);
@@ -26,7 +30,6 @@ export default function Home() {
   const handleAdminLogin = (e: FormEvent) => {
     e.preventDefault();
     setAdminError("");
-    if (!config) return;
     if (adminPin === config.settings.loginPin) {
       if (typeof window !== "undefined") {
         localStorage.setItem(ADMIN_SESSION_KEY, "1");
@@ -35,6 +38,12 @@ export default function Home() {
     } else {
       setAdminError("PIN이 올바르지 않습니다.");
     }
+  };
+
+  const closeAdminLogin = () => {
+    setAdminLoginOpen(false);
+    setAdminPin("");
+    setAdminError("");
   };
 
   return (
@@ -47,41 +56,70 @@ export default function Home() {
       >
         HOME
       </a>
-      <h1 className="text-2xl font-bold text-slate-800 mb-8">인쇄 견적 · 주문</h1>
+      <h1 className="text-2xl font-bold text-slate-800 mb-2 text-center">인쇄 견적 · 주문</h1>
+      <p className="text-sm text-slate-500 mb-6 text-center max-w-md">견적할 품목을 선택하면 바로 계산 화면으로 이동합니다.</p>
 
-      <div className="w-full max-w-sm space-y-6">
-        {/* 주문종류 → 견적 계산 (일반 페이지) */}
-        <Link
-          href="/quote"
-          className="block w-full bg-white border-2 border-slate-200 rounded-xl p-6 text-center hover:border-blue-400 hover:bg-blue-50/50 transition"
-        >
-          <span className="text-lg font-semibold text-slate-800">주문종류 선택</span>
-          <p className="text-sm text-slate-500 mt-1">견적 계산만 가능</p>
-        </Link>
+      <div className="w-full max-w-2xl space-y-8">
+        <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">견적 품목 선택</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {config.products.map((p) => (
+              <Link key={p.id} href={`/quote?product=${encodeURIComponent(p.id)}`} className={productBtnClass}>
+                {p.label}
+              </Link>
+            ))}
+          </div>
+        </section>
 
-        {/* 관리자: 4자리 PIN 입력 → 관리자 페이지 */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-slate-700 mb-2">관리자</h2>
-          <p className="text-xs text-slate-500 mb-3">원가·마진률 확인 및 수정</p>
-          <form onSubmit={handleAdminLogin}>
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              value={adminPin}
-              onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, ""))}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-center tracking-widest"
-              placeholder="4자리 PIN"
-            />
-            {adminError && <p className="mt-2 text-sm text-red-600">{adminError}</p>}
+        <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-700">관리자</h2>
+          <p className="text-xs text-slate-500 mt-1 mb-4">원가·마진률 확인 및 수정</p>
+
+          {!adminLoginOpen ? (
             <button
-              type="submit"
-              className="mt-3 w-full bg-slate-700 text-white py-2 rounded-lg text-sm font-medium hover:bg-slate-800"
+              type="button"
+              onClick={() => setAdminLoginOpen(true)}
+              className="w-full bg-slate-700 text-white py-3 rounded-xl text-sm font-semibold hover:bg-slate-800 transition"
             >
               관리자 페이지 로그인
             </button>
-          </form>
-        </div>
+          ) : (
+            <form onSubmit={handleAdminLogin} className="space-y-3">
+              <div>
+                <label htmlFor="admin-pin" className="block text-xs font-medium text-slate-600 mb-1">
+                  4자리 PIN
+                </label>
+                <input
+                  id="admin-pin"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={adminPin}
+                  onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, ""))}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-center text-lg tracking-[0.4em] font-mono"
+                  placeholder="••••"
+                  autoFocus
+                />
+              </div>
+              {adminError && <p className="text-sm text-red-600">{adminError}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeAdminLogin}
+                  className="flex-1 border border-slate-300 bg-white text-slate-700 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-slate-700 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800"
+                >
+                  로그인
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
       </div>
     </div>
   );
