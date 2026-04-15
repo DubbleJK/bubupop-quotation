@@ -13,7 +13,6 @@ import { ADMIN_SESSION_KEY, ADMIN_CONFIG_KEY, ADMIN_DEFAULT_CONFIG_KEY } from "@
  */
 export default function AdminPage() {
   const router = useRouter();
-  const [config, setConfig] = useState<AppConfig | null>(null);
   const [editing, setEditing] = useState<AppConfig | null>(null);
   const [saved, setSaved] = useState(false);
   const [defaultSaved, setDefaultSaved] = useState(false);
@@ -34,7 +33,6 @@ export default function AdminPage() {
       return;
     }
     configProvider.getAllConfig().then((c) => {
-      setConfig(c);
       setEditing(JSON.parse(JSON.stringify(c)));
     });
   }, [mounted, router]);
@@ -57,7 +55,6 @@ export default function AdminPage() {
         throw new Error(data.error || "저장 실패");
       }
       localStorage.setItem(ADMIN_CONFIG_KEY, JSON.stringify(editing));
-      setConfig(editing);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -87,7 +84,6 @@ export default function AdminPage() {
       } catch {
         // ignore
       }
-      setConfig(c);
       setEditing(JSON.parse(JSON.stringify(c)));
     });
   };

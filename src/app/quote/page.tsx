@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
 import { configProvider } from "@/lib/config";
 import type { AppConfig } from "@/lib/config";
 import { ProductGridPicker } from "@/components/ProductGridPicker";
@@ -32,52 +31,29 @@ function resolveProductId(
   return products[0]?.id ?? "pop";
 }
 
-function QuotePageFallback() {
-  return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-        <a
-          href={PORTAL_URL}
-          target="_self"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-slate-700 text-white hover:bg-slate-800 transition-colors shadow-sm"
-        >
-          HOME
-        </a>
-        <h1 className="text-xl font-semibold text-slate-800">견적 계산</h1>
-        <span className="w-14" />
-      </header>
-      <main className="max-w-6xl mx-auto p-3 md:p-5">
-        <p className="text-sm text-slate-500">화면을 불러오는 중…</p>
-      </main>
-    </div>
-  );
+function getInitialProductId(products: AppConfig["products"]): string {
+  if (typeof window === "undefined") return resolveProductId(null, products);
+  const param = new URLSearchParams(window.location.search).get("product");
+  return resolveProductId(param, products);
 }
 
-function QuotePageContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
+/**
+ * 일반 페이지: 견적 계산만 가능
+ * 품목 버튼 선택 → 입력 → 견적 결과 (?product= 로 품목 공유 가능)
+ */
+export default function QuotePage() {
   const [config, setConfig] = useState<AppConfig>(() => configProvider.getInitialConfig());
+  const [productId, setProductId] = useState(() =>
+    getInitialProductId(config.products)
+  );
   const [summary, setSummary] = useState<SummaryPayload>(emptySummary);
 
-  const productId = useMemo(
-    () => resolveProductId(searchParams.get("product"), config.products),
-    [searchParams, config.products]
-  );
-
-  const prevProductId = useRef(productId);
-
   useEffect(() => {
-    configProvider.getAllConfig().then(setConfig);
+    configProvider.getAllConfig().then((nextConfig) => {
+      setConfig(nextConfig);
+      setProductId((prev) => resolveProductId(prev, nextConfig.products));
+    });
   }, []);
-
-  useEffect(() => {
-    if (prevProductId.current === productId) return;
-    prevProductId.current = productId;
-    // 품목(URL) 변경 시 우측 요약 초기화 — 브라우저 뒤로가기 포함
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL 기반 품목 전환과 요약 상태를 일치시키기 위함
-    setSummary(emptySummary);
-  }, [productId]);
 
   const onSummaryChange = useCallback((payload: SummaryPayload) => {
     setSummary(payload);
@@ -86,9 +62,14 @@ function QuotePageContent() {
   const handleProductChange = useCallback(
     (id: string) => {
       setSummary(emptySummary);
-      router.replace(`/quote?product=${encodeURIComponent(id)}`, { scroll: false });
+      setProductId(id);
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("product", id);
+        window.history.replaceState({}, "", `${url.pathname}?${url.searchParams.toString()}`);
+      }
     },
-    [router]
+    []
   );
 
   const handleReset = useCallback(() => {
@@ -184,17 +165,5 @@ function QuotePageContent() {
         </div>
       </main>
     </div>
-  );
-}
-
-/**
- * 일반 페이지: 견적 계산만 가능
- * 품목 버튼 선택 → 입력 → 견적 결과 (?product= 로 품목 공유 가능)
- */
-export default function QuotePage() {
-  return (
-    <Suspense fallback={<QuotePageFallback />}>
-      <QuotePageContent />
-    </Suspense>
   );
 }

@@ -25,15 +25,6 @@ export interface DtfResult {
   estimatedMinutes: number;
 }
 
-const PICK_SETTINGS = [
-  "dtfSellPerM",
-  "dtfCostPerM",
-  "dtfMinutesPerM",
-  "dtfRollWidthMm",
-  "dtfGapMm",
-  "vatRate",
-] as const;
-
 /** 롤 폭 방향 크기 w, 진행 방향 크기 h 일 때 레이아웃 결과. w가 롤 폭을 넘으면 사용 불가(Infinity 반환). */
 function layout(
   rollWidthMm: number,
@@ -53,7 +44,10 @@ function layout(
 
 export function calcDtf(
   input: DtfInput,
-  s: Pick<Settings, (typeof PICK_SETTINGS)[number]>
+  s: Pick<
+    Settings,
+    "dtfSellPerM" | "dtfCostPerM" | "dtfMinutesPerM" | "dtfRollWidthMm" | "dtfGapMm" | "vatRate"
+  >
 ): DtfResult {
   const { widthMm, heightMm, qty } = input;
   const rollWidthMm = s.dtfRollWidthMm ?? 850;

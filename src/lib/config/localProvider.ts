@@ -21,6 +21,8 @@ import {
   businessCardDesignTiers,
 } from "@/config/rates";
 
+let memoryConfig: AppConfig | null = null;
+
 function getFileConfig(): AppConfig {
   return {
       settings: { ...settings },
@@ -47,6 +49,41 @@ function getFileConfig(): AppConfig {
     };
 }
 
+function cloneConfig(config: AppConfig): AppConfig {
+  if (typeof structuredClone === "function") {
+    return structuredClone(config);
+  }
+  return JSON.parse(JSON.stringify(config)) as AppConfig;
+}
+
+function normalizeConfig(config: AppConfig): AppConfig {
+  const next = cloneConfig(config);
+  next.businessCardDesignTiers = ensureOutputOnlyTier(next.businessCardDesignTiers ?? []);
+  return next;
+}
+
+function readSavedConfig(key: string): AppConfig | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const saved = localStorage.getItem(key);
+    if (!saved) return null;
+    const parsed = JSON.parse(saved) as AppConfig;
+    if (!parsed?.settings || !parsed?.products) return null;
+    return normalizeConfig(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedConfig(key: string, config: AppConfig) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(config));
+  } catch {
+    // ignore storage write failures
+  }
+}
+
 /**
  * V1: 로컬 config + 파일 기본값.
  * 서버(KV)에 저장된 설정이 있으면 우선 사용 → 기기/재접속 시에도 유지.
@@ -54,65 +91,71 @@ function getFileConfig(): AppConfig {
  */
 export const localProvider: ConfigProvider = {
   getInitialConfig(): AppConfig {
-    return getFileConfig();
+    if (memoryConfig) return cloneConfig(memoryConfig);
+
+    const saved = readSavedConfig(ADMIN_CONFIG_KEY);
+    if (saved) {
+      memoryConfig = saved;
+      return cloneConfig(saved);
+    }
+
+    const fileConfig = normalizeConfig(getFileConfig());
+    memoryConfig = fileConfig;
+    return cloneConfig(fileConfig);
   },
 
   async getAllConfig(): Promise<AppConfig> {
     if (typeof window !== "undefined") {
+      const saved = readSavedConfig(ADMIN_CONFIG_KEY);
+      if (saved) {
+        memoryConfig = saved;
+
+        // 초기 응답은 빠르게 반환하고, 백그라운드에서 최신 서버 설정을 동기화한다.
+        void (async () => {
+          try {
+            const res = await fetch("/api/config");
+            if (!res.ok) return;
+            const parsed = normalizeConfig((await res.json()) as AppConfig);
+            memoryConfig = parsed;
+            writeSavedConfig(ADMIN_CONFIG_KEY, parsed);
+          } catch {
+            // ignore
+          }
+        })();
+
+        return cloneConfig(saved);
+      }
+
       try {
-        const res = await fetch("/api/config");
+        const res = await fetch("/api/config", { signal: AbortSignal.timeout(2000) });
         if (res.ok) {
-          const parsed = (await res.json()) as AppConfig;
+          const parsed = normalizeConfig((await res.json()) as AppConfig);
           if (parsed?.settings && parsed?.products) {
-            parsed.businessCardDesignTiers = ensureOutputOnlyTier(
-              parsed.businessCardDesignTiers ?? []
-            );
-            try {
-              localStorage.setItem(ADMIN_CONFIG_KEY, JSON.stringify(parsed));
-            } catch {
-              // ignore
-            }
-            return parsed;
+            memoryConfig = parsed;
+            writeSavedConfig(ADMIN_CONFIG_KEY, parsed);
+            return cloneConfig(parsed);
           }
         }
       } catch {
         // API 실패 시 아래 localStorage/파일 사용
       }
-      try {
-        const saved = localStorage.getItem(ADMIN_CONFIG_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved) as AppConfig;
-          if (parsed?.settings && parsed?.products) {
-            parsed.businessCardDesignTiers = ensureOutputOnlyTier(
-              parsed.businessCardDesignTiers ?? []
-            );
-            return parsed;
-          }
-        }
-      } catch {
-        // ignore invalid saved config
+
+      if (memoryConfig) {
+        return cloneConfig(memoryConfig);
       }
     }
-    return getFileConfig();
+
+    const fallback = normalizeConfig(getFileConfig());
+    memoryConfig = fallback;
+    return cloneConfig(fallback);
   },
 
   async getDefaultConfig(): Promise<AppConfig> {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(ADMIN_DEFAULT_CONFIG_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved) as AppConfig;
-          if (parsed?.settings && parsed?.products) {
-            parsed.businessCardDesignTiers = ensureOutputOnlyTier(
-              parsed.businessCardDesignTiers ?? []
-            );
-            return parsed;
-          }
-        }
-      } catch {
-        // ignore
-      }
+    const saved = readSavedConfig(ADMIN_DEFAULT_CONFIG_KEY);
+    if (saved) {
+      return cloneConfig(saved);
     }
-    return getFileConfig();
+    const fallback = normalizeConfig(getFileConfig());
+    return cloneConfig(fallback);
   },
 };

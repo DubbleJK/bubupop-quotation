@@ -3,7 +3,7 @@
 import type { ProductItem } from "@/lib/config/types";
 
 const baseBtn =
-  "rounded-lg border px-3 py-2.5 text-center text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
+  "rounded-full border px-3 py-2.5 text-center text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
 
 const inactiveBtn = "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50";
 const activeBtn = "border-blue-400 bg-blue-50 text-blue-800";
