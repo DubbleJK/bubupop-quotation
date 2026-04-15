@@ -59,22 +59,23 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
   const [autoCalculate, setAutoCalculate] = useState(true);
   const [showDebug, setShowDebug] = useState(false);
 
+  const unitPriceWithVat = useMemo(() => {
+    if (!result) return null;
+    return Math.round(result.unitSupplyPrice * 1.1);
+  }, [result]);
+
   const summaryItems = useMemo(() => {
     if (!result) return [];
     return [
-      { label: "면적", value: formatArea(result.area) },
       { label: "개당 공급가", value: result.unitSupplyPrice },
       { label: "공급가 합계", value: result.supplyTotal },
       { label: "부가세", value: result.vat },
-      { label: "기본 최종금액", value: result.baseTotal },
-      { label: "적용 구간", value: `${result.quantityBracket} 구간` },
-      { label: "적용 가격 정책", value: `${result.adjustmentLabel} 적용` },
       { label: "최종 판매가", value: result.finalPrice },
     ];
   }, [result]);
 
-  const runCalculate = useCallback(() => {
-    const validated = validateInput(width, height, qty);
+  const applyCalculation = useCallback((nextWidth: string, nextHeight: string, nextQty: string) => {
+    const validated = validateInput(nextWidth, nextHeight, nextQty);
     if (validated == null) {
       setError(undefined);
       setWarning(undefined);
@@ -105,12 +106,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
     setResult(nextResult);
     setError(undefined);
     setWarning(nextWarning);
-  }, [width, height, qty]);
-
-  useEffect(() => {
-    if (!autoCalculate) return;
-    runCalculate();
-  }, [autoCalculate, runCalculate]);
+  }, []);
 
   useEffect(() => {
     onSummaryChange?.({
@@ -128,7 +124,9 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
       `사이즈: ${result.width}x${result.height}mm`,
       `수량: ${result.qty}개`,
       `면적: ${formatArea(result.area)}`,
-      `개당 공급가: ${formatWon(result.unitSupplyPrice)}`,
+      `개당 공급가: ${formatWon(result.unitSupplyPrice)} (VAT 포함 ${formatWon(
+        Math.round(result.unitSupplyPrice * 1.1)
+      )})`,
       `공급가 합계: ${formatWon(result.supplyTotal)}`,
       `부가세: ${formatWon(result.vat)}`,
       `기본 최종금액: ${formatWon(result.baseTotal)}`,
@@ -154,7 +152,11 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
             min={0}
             step="0.01"
             value={width}
-            onChange={(e) => setWidth(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setWidth(next);
+              if (autoCalculate) applyCalculation(next, height, qty);
+            }}
             className="w-full border border-slate-300 rounded-lg px-3 py-2"
             placeholder="예: 45"
           />
@@ -166,7 +168,11 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
             min={0}
             step="0.01"
             value={height}
-            onChange={(e) => setHeight(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setHeight(next);
+              if (autoCalculate) applyCalculation(width, next, qty);
+            }}
             className="w-full border border-slate-300 rounded-lg px-3 py-2"
             placeholder="예: 30"
           />
@@ -178,7 +184,11 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
             min={1}
             step="1"
             value={qty}
-            onChange={(e) => setQty(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setQty(next);
+              if (autoCalculate) applyCalculation(width, height, next);
+            }}
             className="w-full border border-slate-300 rounded-lg px-3 py-2"
             placeholder="예: 100"
           />
@@ -188,7 +198,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={runCalculate}
+          onClick={() => applyCalculation(width, height, qty)}
           className="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-900"
         >
           견적 계산하기
@@ -197,7 +207,11 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
           <input
             type="checkbox"
             checked={autoCalculate}
-            onChange={(e) => setAutoCalculate(e.target.checked)}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setAutoCalculate(checked);
+              if (checked) applyCalculation(width, height, qty);
+            }}
             className="accent-slate-700"
           />
           입력값 변경 시 자동 계산
@@ -209,17 +223,32 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
 
       {result && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-          <p className="text-sm text-slate-600">면적: {formatArea(result.area)}</p>
-          <p className="text-sm text-slate-700">개당 공급가: {formatWon(result.unitSupplyPrice)}</p>
+          <p className="text-sm text-slate-700">
+            개당 공급가: {formatWon(result.unitSupplyPrice)}{" "}
+            {unitPriceWithVat != null && (
+              <span className="font-bold text-slate-900">
+                (VAT 포함 {formatWon(unitPriceWithVat)})
+              </span>
+            )}
+          </p>
           <p className="text-sm text-slate-700">공급가 합계: {formatWon(result.supplyTotal)}</p>
           <p className="text-sm text-slate-700">부가세: {formatWon(result.vat)}</p>
-          <p className="text-sm text-slate-700">기본 최종금액: {formatWon(result.baseTotal)}</p>
-          <p className="text-sm text-slate-700">적용 구간: {result.quantityBracket} 구간</p>
-          <p className="text-sm text-slate-700">적용 가격 정책: {result.adjustmentLabel} 적용</p>
           <div className="pt-2 border-t border-slate-200">
             <p className="text-xs text-slate-500 mb-1">최종 판매가</p>
             <p className="text-3xl font-bold text-slate-900">{formatWon(result.finalPrice)}</p>
           </div>
+
+          <details className="rounded-lg border border-slate-200 bg-white p-3">
+            <summary className="cursor-pointer text-sm font-medium text-slate-700">
+              상세보기
+            </summary>
+            <div className="mt-3 space-y-2 text-sm text-slate-700">
+              <p>면적: {formatArea(result.area)}</p>
+              <p>기본 최종금액: {formatWon(result.baseTotal)}</p>
+              <p>적용 구간: {result.quantityBracket} 구간</p>
+              <p>적용 가격 정책: {result.adjustmentLabel} 적용</p>
+            </div>
+          </details>
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
