@@ -31,27 +31,24 @@ function resolveProductId(
   return products[0]?.id ?? "pop";
 }
 
-function getInitialProductId(products: AppConfig["products"]): string {
-  if (typeof window === "undefined") return resolveProductId(null, products);
-  const param = new URLSearchParams(window.location.search).get("product");
-  return resolveProductId(param, products);
-}
-
 /**
  * 일반 페이지: 견적 계산만 가능
  * 품목 버튼 선택 → 입력 → 견적 결과 (?product= 로 품목 공유 가능)
  */
 export default function QuotePage() {
   const [config, setConfig] = useState<AppConfig>(() => configProvider.getInitialConfig());
-  const [productId, setProductId] = useState(() =>
-    getInitialProductId(config.products)
-  );
+  /** SSR·첫 페인트는 URL 없이 고정 → 서버/클라이언트 DOM 일치(모바일 하이드레이션 오류 방지) */
+  const [productId, setProductId] = useState(() => resolveProductId(null, config.products));
   const [summary, setSummary] = useState<SummaryPayload>(emptySummary);
 
   useEffect(() => {
-    configProvider.getAllConfig().then((nextConfig) => {
+    const urlParam =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("product")
+        : null;
+    void configProvider.getAllConfig().then((nextConfig) => {
       setConfig(nextConfig);
-      setProductId((prev) => resolveProductId(prev, nextConfig.products));
+      setProductId(resolveProductId(urlParam, nextConfig.products));
     });
   }, []);
 

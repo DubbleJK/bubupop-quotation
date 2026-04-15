@@ -2,6 +2,19 @@ import type { ConfigProvider } from "./provider";
 import type { AppConfig, BusinessCardDesignTier } from "./types";
 import { ADMIN_CONFIG_KEY, ADMIN_DEFAULT_CONFIG_KEY } from "./storageKeys";
 
+/** 구형 모바일 Safari 등에서 `AbortSignal.timeout`이 없을 때 대비 */
+function fetchConfigWithTimeout(url: string, ms: number): Promise<Response> {
+  const signalTimeout = (
+    AbortSignal as typeof AbortSignal & { timeout?: (delay: number) => AbortSignal }
+  ).timeout;
+  if (typeof signalTimeout === "function") {
+    return fetch(url, { signal: signalTimeout(ms) });
+  }
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(id));
+}
+
 const OUTPUT_ONLY_TIER: BusinessCardDesignTier = { id: "output-only", label: "출력만", fee: 0 };
 
 function ensureOutputOnlyTier(tiers: BusinessCardDesignTier[]): BusinessCardDesignTier[] {
@@ -113,7 +126,7 @@ export const localProvider: ConfigProvider = {
         // 초기 응답은 빠르게 반환하고, 백그라운드에서 최신 서버 설정을 동기화한다.
         void (async () => {
           try {
-            const res = await fetch("/api/config");
+            const res = await fetchConfigWithTimeout("/api/config", 8000);
             if (!res.ok) return;
             const parsed = normalizeConfig((await res.json()) as AppConfig);
             memoryConfig = parsed;
@@ -127,7 +140,7 @@ export const localProvider: ConfigProvider = {
       }
 
       try {
-        const res = await fetch("/api/config", { signal: AbortSignal.timeout(2000) });
+        const res = await fetchConfigWithTimeout("/api/config", 2000);
         if (res.ok) {
           const parsed = normalizeConfig((await res.json()) as AppConfig);
           if (parsed?.settings && parsed?.products) {
