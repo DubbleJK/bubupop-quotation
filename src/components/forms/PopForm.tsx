@@ -25,29 +25,33 @@ export function PopForm({ settings, onReset, onSummaryChange }: PopFormProps) {
   }, [widthMm, heightMm, qty, settings]);
 
   const mainSupply = result && !result.error ? result.supply4Cut : undefined;
-  const items = result
-    ? result.error
-      ? []
-      : [
-          { label: "소비 길이(m)", value: result.lengthM.toFixed(2) },
-          {
-            label: "4-cut 공급가",
-            value: result.supply4Cut,
-            sub: [
-              { label: "VAT(10%)", value: result.vatAndTotal4.vat },
-              { label: "총액", value: result.vatAndTotal4.total },
-            ],
-          },
-          {
-            label: "2-cut 공급가",
-            value: result.supply2Cut,
-            sub: [
-              { label: "VAT(10%)", value: result.vatAndTotal2.vat },
-              { label: "총액", value: result.vatAndTotal2.total },
-            ],
-          },
-        ]
-    : [];
+  const items = useMemo(
+    () =>
+      result
+        ? result.error
+          ? []
+          : [
+              { label: "소비 길이(m)", value: result.lengthM.toFixed(2) },
+              {
+                label: "4-cut 공급가",
+                value: result.supply4Cut,
+                sub: [
+                  { label: "VAT(10%)", value: result.vatAndTotal4.vat },
+                  { label: "총액", value: result.vatAndTotal4.total },
+                ],
+              },
+              {
+                label: "2-cut 공급가",
+                value: result.supply2Cut,
+                sub: [
+                  { label: "VAT(10%)", value: result.vatAndTotal2.vat },
+                  { label: "총액", value: result.vatAndTotal2.total },
+                ],
+              },
+            ]
+        : [],
+    [result]
+  );
 
   useEffect(() => {
     onSummaryChange?.({

@@ -28,14 +28,18 @@ export function StickerSolventForm({ settings, defaultGapMm, onReset, onSummaryC
     return calcStickerSolvent({ widthMm: w, heightMm: h, qty: q, gapMm: g }, settings);
   }, [widthMm, heightMm, qty, gapMm, settings]);
 
-  const items = result
-    ? [
-        { label: "소비 길이(m)", value: result.lengthM.toFixed(2) },
-        { label: "공급가", value: result.supplyPrice },
-        { label: "VAT(10%)", value: result.vatAndTotal.vat },
-        { label: "총액", value: result.vatAndTotal.total },
-      ]
-    : [];
+  const items = useMemo(
+    () =>
+      result
+        ? [
+            { label: "소비 길이(m)", value: result.lengthM.toFixed(2) },
+            { label: "공급가", value: result.supplyPrice },
+            { label: "VAT(10%)", value: result.vatAndTotal.vat },
+            { label: "총액", value: result.vatAndTotal.total },
+          ]
+        : [],
+    [result]
+  );
 
   useEffect(() => {
     onSummaryChange?.({

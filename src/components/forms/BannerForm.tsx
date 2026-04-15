@@ -30,13 +30,17 @@ export function BannerForm({ settings, onReset, onSummaryChange }: BannerFormPro
     );
   }, [outputQty, indoorStandQty, outdoorStandQty, settings]);
 
-  const items = result
-    ? [
-        { label: "공급가", value: result.supplyPrice },
-        { label: "VAT(10%)", value: result.vatAndTotal.vat },
-        { label: "총액", value: result.vatAndTotal.total },
-      ]
-    : [];
+  const items = useMemo(
+    () =>
+      result
+        ? [
+            { label: "공급가", value: result.supplyPrice },
+            { label: "VAT(10%)", value: result.vatAndTotal.vat },
+            { label: "총액", value: result.vatAndTotal.total },
+          ]
+        : [],
+    [result]
+  );
 
   useEffect(() => {
     onSummaryChange?.({

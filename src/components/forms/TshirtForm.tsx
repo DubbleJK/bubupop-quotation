@@ -42,15 +42,19 @@ export function TshirtForm({
     );
   }, [typeId, qty, numberOf2XLPlus, settings, typeItem, tshirtSizeUpPer2XL, tshirtDiscountTiers]);
 
-  const items = result
-    ? [
-        { label: "단가", value: result.unitPrice },
-        { label: "할인율", value: `${result.discountRate * 100}%` },
-        { label: "공급가", value: result.supplyPrice },
-        { label: "VAT(10%)", value: result.vatAndTotal.vat },
-        { label: "총액", value: result.vatAndTotal.total },
-      ]
-    : [];
+  const items = useMemo(
+    () =>
+      result
+        ? [
+            { label: "단가", value: result.unitPrice },
+            { label: "할인율", value: `${result.discountRate * 100}%` },
+            { label: "공급가", value: result.supplyPrice },
+            { label: "VAT(10%)", value: result.vatAndTotal.vat },
+            { label: "총액", value: result.vatAndTotal.total },
+          ]
+        : [],
+    [result]
+  );
 
   useEffect(() => {
     onSummaryChange?.({

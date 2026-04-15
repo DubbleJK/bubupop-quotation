@@ -84,17 +84,21 @@ export function DtfForm({ settings, onReset, onSummaryChange }: DtfFormProps) {
     };
   }, [results, settings.vatRate]);
 
-  const summaryItems = totalResult
-    ? [
-        { label: "항목 수", value: `${totalResult.count}개 디자인` },
-        { label: "총 사용 길이", value: `${totalResult.lengthM.toFixed(2)}m` },
-        { label: "공급가", value: totalResult.supplyPrice },
-        { label: "VAT(10%)", value: totalResult.vatAndTotal.vat },
-        { label: "총액", value: totalResult.vatAndTotal.total },
-        { label: "참고 원가", value: totalResult.costReference },
-        { label: "예상 인쇄 시간", value: `${totalResult.estimatedMinutes}분` },
-      ]
-    : [];
+  const summaryItems = useMemo(
+    () =>
+      totalResult
+        ? [
+            { label: "항목 수", value: `${totalResult.count}개 디자인` },
+            { label: "총 사용 길이", value: `${totalResult.lengthM.toFixed(2)}m` },
+            { label: "공급가", value: totalResult.supplyPrice },
+            { label: "VAT(10%)", value: totalResult.vatAndTotal.vat },
+            { label: "총액", value: totalResult.vatAndTotal.total },
+            { label: "참고 원가", value: totalResult.costReference },
+            { label: "예상 인쇄 시간", value: `${totalResult.estimatedMinutes}분` },
+          ]
+        : [],
+    [totalResult]
+  );
 
   useEffect(() => {
     onSummaryChange?.({

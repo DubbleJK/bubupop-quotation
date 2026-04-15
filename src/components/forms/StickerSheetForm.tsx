@@ -56,12 +56,16 @@ export function StickerSheetForm({
 
   const a4Supply = result?.a4 && !result.a4.disabled ? result.a4.supplyPrice : undefined;
   const a3Supply = result?.a3 && !result.a3.disabled ? result.a3.supplyPrice : undefined;
-  const items = result
-    ? [
-        ...(result.a4.disabled ? [] : [{ label: "A4 공급가", value: result.a4.supplyPrice }]),
-        ...(result.a3.disabled ? [] : [{ label: "A3 공급가", value: result.a3.supplyPrice }]),
-      ]
-    : [];
+  const items = useMemo(
+    () =>
+      result
+        ? [
+            ...(result.a4.disabled ? [] : [{ label: "A4 공급가", value: result.a4.supplyPrice }]),
+            ...(result.a3.disabled ? [] : [{ label: "A3 공급가", value: result.a3.supplyPrice }]),
+          ]
+        : [],
+    [result]
+  );
 
   useEffect(() => {
     onSummaryChange?.({
