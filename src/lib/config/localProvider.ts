@@ -69,8 +69,27 @@ function cloneConfig(config: AppConfig): AppConfig {
   return JSON.parse(JSON.stringify(config)) as AppConfig;
 }
 
+/**
+ * Vercel KV·localStorage에 남은 구버전 JSON에는 `products`에 신규 품목이 없을 수 있음.
+ * 모바일은 캐시가 비어 서버 설정만 쓰는 경우가 많아 품목이 누락된 것처럼 보일 수 있어,
+ * 코드에 정의된 품목 순서·id를 기준으로 항상 채운다(라벨은 저장값 우선).
+ */
+function mergeProductCatalog(saved: AppConfig["products"] | undefined): AppConfig["products"] {
+  const baseline = products.map((p) => ({ id: p.id, label: p.label }));
+  if (!saved?.length) return baseline;
+
+  const savedById = new Map(saved.map((p) => [p.id, p]));
+  return baseline.map((def) => {
+    const s = savedById.get(def.id);
+    if (!s) return def;
+    const label = typeof s.label === "string" && s.label.trim() !== "" ? s.label : def.label;
+    return { id: def.id, label };
+  });
+}
+
 function normalizeConfig(config: AppConfig): AppConfig {
   const next = cloneConfig(config);
+  next.products = mergeProductCatalog(next.products);
   next.businessCardDesignTiers = ensureOutputOnlyTier(next.businessCardDesignTiers ?? []);
   return next;
 }
