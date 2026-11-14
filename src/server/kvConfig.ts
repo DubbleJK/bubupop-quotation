@@ -4,10 +4,13 @@ import { normalizeConfig } from "@/lib/config/fileConfig";
 /** 기존 키를 유지한다. 다른 키를 만들거나 운영 데이터를 이 모듈 로드만으로 쓰지 않는다. */
 export const KV_CONFIG_KEY = "quotation_admin_config";
 
+function kvEnv(name: "KV_REST_API_URL" | "KV_REST_API_TOKEN"): string | undefined {
+  const value = process.env[name];
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
 export function kvCredentialsPresent(): boolean {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  return typeof url === "string" && url !== "" && typeof token === "string" && token !== "";
+  return kvEnv("KV_REST_API_URL") !== undefined && kvEnv("KV_REST_API_TOKEN") !== undefined;
 }
 
 export type KvReadResult =
