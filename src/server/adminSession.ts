@@ -6,7 +6,7 @@ const MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 /** 프로덕션에서는 ADMIN_SESSION_SECRET(16자 이상)이 있어야 세션을 발급한다. */
 export function sessionSecret(): string | null {
-  const env = process.env.ADMIN_SESSION_SECRET;
+  const env = process.env["ADMIN_SESSION_SECRET"];
   if (typeof env === "string" && env.length >= 16) return env;
   if (process.env.NODE_ENV === "production") return null;
   return DEV_FALLBACK_SECRET;
