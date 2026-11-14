@@ -18,7 +18,8 @@ export interface Settings {
   dtfRollWidthMm: number;
   dtfGapMm: number;
   stickerCutSecondsPerSheet: number;
-  loginPin: string;
+  /** 관리자 인증용. 공개 견적 설정에는 포함하지 않는다. */
+  loginPin?: string;
   bannerBasePrice: number;
   bannerStandIndoor: number;
   bannerStandOutdoor: number;
@@ -70,6 +71,12 @@ export interface BusinessCardDesignTier {
   fee: number;
 }
 
+/** 서버 저장이 성공할 때마다 올라가는 설정 버전. 구버전 JSON에는 없을 수 있다. */
+export interface ConfigMeta {
+  revision: number;
+  updatedAt: string | null;
+}
+
 export interface AppConfig {
   settings: Settings;
   products: ProductItem[];
@@ -80,4 +87,5 @@ export interface AppConfig {
   tshirtDiscountTiers: TshirtDiscountTier[];
   businessCardOptions: BusinessCardOption[];
   businessCardDesignTiers: BusinessCardDesignTier[];
+  configMeta?: ConfigMeta;
 }

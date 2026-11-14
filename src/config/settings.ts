@@ -18,7 +18,6 @@ export const settings = {
   dtfRollWidthMm: 850,
   dtfGapMm: 7,
   stickerCutSecondsPerSheet: 30,
-  loginPin: "5683",
   bannerBasePrice: 22000,
   bannerStandIndoor: 15000,
   bannerStandOutdoor: 28000,

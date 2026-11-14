@@ -3,9 +3,8 @@
 import { useState, useEffect, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { configProvider } from "@/lib/config";
+import { configProvider, describeQuoteSource } from "@/lib/config";
 import type { AppConfig } from "@/lib/config";
-import { ADMIN_SESSION_KEY } from "@/lib/config/storageKeys";
 import { PORTAL_URL } from "@/lib/portalUrl";
 
 const productBtnClass =
@@ -19,24 +18,46 @@ const productBtnClass =
 export default function Home() {
   const router = useRouter();
   const [config, setConfig] = useState<AppConfig>(() => configProvider.getInitialConfig());
+  const [configNote, setConfigNote] = useState("가격 설정을 확인하는 중입니다.");
   const [adminPin, setAdminPin] = useState("");
   const [adminError, setAdminError] = useState("");
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
 
   useEffect(() => {
-    configProvider.getAllConfig().then(setConfig);
+    let cancelled = false;
+    configProvider.loadQuoteConfig().then((result) => {
+      if (cancelled) return;
+      if (result.ready) {
+        setConfig(result.config);
+        setConfigNote(describeQuoteSource(result));
+      } else {
+        setConfig(configProvider.getInitialConfig());
+        setConfigNote("서버 설정을 확인하지 못했습니다. 코드 기본 품목만 표시합니다.");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleAdminLogin = (e: FormEvent) => {
+  const handleAdminLogin = async (e: FormEvent) => {
     e.preventDefault();
     setAdminError("");
-    if (adminPin === config.settings.loginPin) {
-      if (typeof window !== "undefined") {
-        localStorage.setItem(ADMIN_SESSION_KEY, "1");
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin }),
+      });
+      if (!res.ok) {
+        setAdminError(
+          res.status === 503 ? "서버 세션 설정을 확인하지 못했습니다." : "PIN이 올바르지 않습니다."
+        );
+        return;
       }
       router.push("/admin");
-    } else {
-      setAdminError("PIN이 올바르지 않습니다.");
+    } catch {
+      setAdminError("로그인 요청에 실패했습니다.");
     }
   };
 
@@ -57,7 +78,8 @@ export default function Home() {
         HOME
       </a>
       <h1 className="text-2xl font-bold text-slate-800 mb-1 text-center">인쇄 견적 · 주문</h1>
-      <p className="text-sm text-slate-500 mb-4 text-center max-w-md">견적할 품목을 선택하면 바로 계산 화면으로 이동합니다.</p>
+      <p className="text-sm text-slate-500 mb-1 text-center max-w-md">견적할 품목을 선택하면 바로 계산 화면으로 이동합니다.</p>
+      <p className="text-xs text-slate-500 mb-4 text-center max-w-md">{configNote}</p>
 
       <div className="w-full max-w-2xl space-y-5">
         <section className="bg-white border border-slate-200 rounded-xl p-4">

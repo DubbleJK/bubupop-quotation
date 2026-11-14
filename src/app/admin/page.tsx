@@ -5,16 +5,29 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { configProvider } from "@/lib/config";
 import type { AppConfig } from "@/lib/config";
-import { ADMIN_SESSION_KEY, ADMIN_CONFIG_KEY, ADMIN_DEFAULT_CONFIG_KEY } from "@/lib/config/storageKeys";
+import { ADMIN_DEFAULT_CONFIG_KEY } from "@/lib/config/storageKeys";
+import { toPublicConfig } from "@/lib/config/publicConfig";
+
+interface AppliedConfigInfo {
+  source: "server" | "default";
+  revision: number;
+  updatedAt: string | null;
+}
+
+interface SaveResult {
+  ok: boolean;
+  text: string;
+}
 
 /**
- * 관리자 페이지: 원가·마진률 확인 및 수정 (마인드맵 기준)
- * PIN 로그인 후 접근. 수정한 설정은 localStorage에 저장되어 견적 페이지에 반영됨.
+ * 관리자 페이지: 원가·마진률 확인 및 수정.
+ * 로그인 세션은 서버 쿠키로 확인하고, 견적 설정은 서버 저장이 성공한 뒤에만 반영한다.
  */
 export default function AdminPage() {
   const router = useRouter();
   const [editing, setEditing] = useState<AppConfig | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [applied, setApplied] = useState<AppliedConfigInfo | null>(null);
+  const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
   const [defaultSaved, setDefaultSaved] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -24,50 +37,80 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    const session = typeof window !== "undefined" ? localStorage.getItem(ADMIN_SESSION_KEY) : null;
-    if (session !== "1") {
-      if (typeof window !== "undefined") {
+    let cancelled = false;
+    void (async () => {
+      const session = await fetch("/api/admin/session");
+      if (!session.ok) {
         alert("로그인 PIN을 입력하세요.");
+        router.replace("/");
+        return;
       }
-      router.replace("/");
-      return;
-    }
-    configProvider.getAllConfig().then((c) => {
-      setEditing(JSON.parse(JSON.stringify(c)));
-    });
+      const res = await fetch("/api/admin/config");
+      if (!res.ok) {
+        alert("관리자 설정을 불러오지 못했습니다.");
+        router.replace("/");
+        return;
+      }
+      const data = (await res.json()) as {
+        config: AppConfig;
+        source: "server" | "default";
+        revision: number;
+        updatedAt: string | null;
+      };
+      if (cancelled) return;
+      setEditing(data.config);
+      setApplied({ source: data.source, revision: data.revision, updatedAt: data.updatedAt });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [mounted, router]);
 
   const handleSave = async () => {
     if (!editing || typeof window === "undefined") return;
+    setSaveResult(null);
     try {
-      const pin = editing.settings.loginPin ?? "";
       const res = await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin, config: editing }),
+        body: JSON.stringify({ config: editing }),
       });
-      if (res.status === 401) {
-        alert("PIN이 일치하지 않습니다. 현재 설정된 로그인 PIN을 입력한 상태에서 저장해 주세요.");
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        revision?: number;
+        updatedAt?: string | null;
+        publicConfig?: AppConfig;
+      };
+      if (!res.ok) {
+        const reason =
+          res.status === 401
+            ? "로그인이 필요합니다."
+            : "서버에 저장하지 못했습니다. 이 브라우저에는 저장하지 않았고, 견적에는 반영되지 않습니다.";
+        setSaveResult({ ok: false, text: reason });
+        alert(reason);
         return;
       }
-      if (!res.ok && res.status !== 503) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "저장 실패");
+      if (data.publicConfig) {
+        configProvider.rememberServerConfig(data.publicConfig);
       }
-      localStorage.setItem(ADMIN_CONFIG_KEY, JSON.stringify(editing));
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
-      console.error(e);
-      alert(e instanceof Error ? e.message : "저장 중 오류가 났습니다.");
+      setApplied({
+        source: "server",
+        revision: data.revision ?? 0,
+        updatedAt: data.updatedAt ?? null,
+      });
+      setSaveResult({ ok: true, text: `서버 저장 성공 (버전 ${data.revision ?? 0})` });
+    } catch {
+      const reason = "서버에 저장하지 못했습니다. 이 브라우저에는 저장하지 않았고, 견적에는 반영되지 않습니다.";
+      setSaveResult({ ok: false, text: reason });
+      alert(reason);
     }
   };
 
   const handleSaveAsDefault = () => {
     if (!editing || typeof window === "undefined") return;
-    if (!confirm("지금 설정된 값을 '기본값'으로 저장합니다. 나중에 '기본값 복원' 시 이 값으로 돌아갑니다. 진행할까요?")) return;
+    if (!confirm("이 브라우저의 복원 템플릿으로만 저장합니다. 견적에 쓰는 서버 설정은 바뀌지 않습니다. 진행할까요?")) return;
     try {
-      localStorage.setItem(ADMIN_DEFAULT_CONFIG_KEY, JSON.stringify(editing));
+      localStorage.setItem(ADMIN_DEFAULT_CONFIG_KEY, JSON.stringify(toPublicConfig(editing)));
       setDefaultSaved(true);
       setTimeout(() => setDefaultSaved(false), 2000);
     } catch (e) {
@@ -76,16 +119,46 @@ export default function AdminPage() {
   };
 
   const handleResetToDefault = () => {
-    if (typeof window === "undefined") return;
-    if (!confirm("저장된 설정을 지우고 기본 설정으로 되돌릴까요? (기본값으로 저장해 둔 게 있으면 그 값으로, 없으면 코드 기본값으로 복원됩니다.)")) return;
-    configProvider.getDefaultConfig().then((c) => {
-      try {
-        localStorage.setItem(ADMIN_CONFIG_KEY, JSON.stringify(c));
-      } catch {
-        // ignore
+    if (!editing || typeof window === "undefined") return;
+    if (!confirm("서버에 저장된 견적 설정을 복원 템플릿으로 되돌립니다. 서버 저장이 성공해야 적용됩니다.")) return;
+    void (async () => {
+      const base = await configProvider.getDefaultConfig();
+      const next: AppConfig = {
+        ...base,
+        settings: { ...base.settings, loginPin: editing.settings.loginPin ?? "" },
+      };
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: next }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        revision?: number;
+        updatedAt?: string | null;
+        publicConfig?: AppConfig;
+      };
+      if (!res.ok) {
+        const reason = "서버에 복원하지 못했습니다. 이 브라우저에는 저장하지 않았습니다.";
+        setSaveResult({ ok: false, text: reason });
+        alert(reason);
+        return;
       }
-      setEditing(JSON.parse(JSON.stringify(c)));
-    });
+      if (data.publicConfig) {
+        configProvider.rememberServerConfig(data.publicConfig);
+        setEditing({
+          ...data.publicConfig,
+          settings: { ...data.publicConfig.settings, loginPin: editing.settings.loginPin ?? "" },
+        });
+      } else {
+        setEditing(next);
+      }
+      setApplied({
+        source: "server",
+        revision: data.revision ?? 0,
+        updatedAt: data.updatedAt ?? null,
+      });
+      setSaveResult({ ok: true, text: `서버에 기본값을 복원했습니다 (버전 ${data.revision ?? 0})` });
+    })();
   };
 
   const updateSettings = <K extends keyof AppConfig["settings"]>(
@@ -169,10 +242,18 @@ export default function AdminPage() {
             onClick={handleSave}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
           >
-            {saved ? "저장됨" : "저장"}
+            저장
           </button>
         </div>
       </header>
+      <p className="bg-white border-b border-slate-200 px-4 py-2 text-xs text-slate-600">
+        {applied
+          ? `적용 중: ${applied.source === "server" ? "서버 설정" : "코드 기본값"} · 버전 ${applied.revision}${
+              applied.updatedAt ? ` · ${applied.updatedAt}` : ""
+            }`
+          : "설정을 불러오는 중입니다."}
+        {saveResult ? ` · 마지막 저장: ${saveResult.text}` : ""}
+      </p>
       <main className="max-w-3xl mx-auto p-4 md:p-6 space-y-8">
         {/* 공통 */}
         <section className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
@@ -182,7 +263,7 @@ export default function AdminPage() {
               <span className="text-xs text-slate-500">로그인 PIN</span>
               <input
                 type="text"
-                value={s.loginPin}
+                value={s.loginPin ?? ""}
                 onChange={(e) => updateSettings("loginPin", e.target.value)}
                 className="border border-slate-300 rounded px-2 py-1"
               />

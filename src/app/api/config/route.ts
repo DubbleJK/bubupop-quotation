@@ -1,57 +1,76 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import type { AppConfig } from "@/lib/config/types";
+import { normalizeConfig } from "@/lib/config/fileConfig";
+import { toPublicConfig } from "@/lib/config/publicConfig";
+import { readConfigMeta, withNextRevision } from "@/lib/config/configMeta";
+import { readKvConfig, writeKvConfig } from "@/server/kvConfig";
+import { ADMIN_COOKIE_NAME, verifyAdminSession } from "@/server/adminSession";
+import { defaultAdminPin } from "@/server/defaultAdminPin";
 
-const KV_KEY = "quotation_admin_config";
-
-async function getKV() {
-  try {
-    const { kv } = await import("@vercel/kv");
-    return kv;
-  } catch {
-    return null;
-  }
-}
-
-/** 설정 조회 (모든 사용자). KV에 없으면 404 → 클라이언트가 localStorage/파일 기본값 사용 */
+/** 공개 견적 설정. 인증 비밀값은 포함하지 않는다. */
 export async function GET() {
-  const kv = await getKV();
-  if (!kv) return NextResponse.json({ error: "KV not configured" }, { status: 404 });
-  try {
-    const raw = await kv.get<string>(KV_KEY);
-    if (!raw) return NextResponse.json(null, { status: 404 });
-    const config = typeof raw === "string" ? (JSON.parse(raw) as AppConfig) : raw;
-    if (!config?.settings || !config?.products) return NextResponse.json(null, { status: 404 });
-    return NextResponse.json(config);
-  } catch {
-    return NextResponse.json(null, { status: 404 });
+  const stored = await readKvConfig();
+  if (stored.state === "unconfigured" || stored.state === "empty") {
+    return NextResponse.json({ code: "absent" }, { status: 404 });
   }
+  if (stored.state === "error") {
+    return NextResponse.json({ code: "unavailable" }, { status: 503 });
+  }
+  return NextResponse.json(toPublicConfig(stored.config));
 }
 
-/** 설정 저장 (PIN 확인). 저장된 설정이 없으면 첫 저장으로 보고 PIN 없이 허용 */
-export async function POST(request: Request) {
-  const kv = await getKV();
-  if (!kv) return NextResponse.json({ error: "KV not configured" }, { status: 503 });
-  try {
-    const body = (await request.json()) as { pin?: string; config?: AppConfig };
-    const { pin, config } = body;
-    if (!config?.settings || !config?.products) return NextResponse.json({ error: "Invalid config" }, { status: 400 });
-
-    const current = await kv.get<string>(KV_KEY);
-    const currentConfig = current
-      ? (typeof current === "string" ? (JSON.parse(current) as AppConfig) : current)
-      : null;
-
-    if (currentConfig?.settings) {
-      const savedPin = currentConfig.settings.loginPin ?? "";
-      if (savedPin !== (pin ?? "")) {
-        return NextResponse.json({ error: "PIN mismatch" }, { status: 401 });
-      }
-    }
-
-    await kv.set(KV_KEY, JSON.stringify(config));
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error("[api/config] POST error:", e);
-    return NextResponse.json({ error: "Save failed" }, { status: 500 });
+/** 관리자 세션이 있을 때만 서버에 저장한다. 실패하면 아무 곳에도 쓰지 않는다. */
+export async function POST(request: NextRequest) {
+  const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  if (!verifyAdminSession(token)) {
+    return NextResponse.json({ error: "unauthorized", persisted: "none" }, { status: 401 });
   }
+
+  let config: AppConfig | undefined;
+  try {
+    const body = (await request.json()) as { config?: AppConfig };
+    config = body.config;
+  } catch {
+    return NextResponse.json({ error: "invalid_body", persisted: "none" }, { status: 400 });
+  }
+  if (!config?.settings || !config?.products) {
+    return NextResponse.json({ error: "invalid_config", persisted: "none" }, { status: 400 });
+  }
+
+  const stored = await readKvConfig();
+  if (stored.state === "error") {
+    return NextResponse.json({ error: "config_unreadable", persisted: "none" }, { status: 503 });
+  }
+
+  const previous = stored.state === "ok" ? stored.config : null;
+  const incomingPin = typeof config.settings.loginPin === "string" ? config.settings.loginPin.trim() : "";
+  let keptPin = defaultAdminPin;
+  if (incomingPin !== "") {
+    keptPin = incomingPin;
+  } else if (previous?.settings.loginPin) {
+    keptPin = previous.settings.loginPin;
+  }
+
+  const normalized = normalizeConfig(config);
+  const next = withNextRevision(
+    {
+      ...normalized,
+      settings: { ...normalized.settings, loginPin: keptPin },
+    },
+    previous
+  );
+
+  const written = await writeKvConfig(next);
+  if (!written.ok) {
+    return NextResponse.json({ error: written.reason, persisted: "none" }, { status: 503 });
+  }
+
+  const meta = readConfigMeta(next);
+  return NextResponse.json({
+    ok: true,
+    persisted: "server",
+    revision: meta.revision,
+    updatedAt: meta.updatedAt,
+    publicConfig: toPublicConfig(next),
+  });
 }

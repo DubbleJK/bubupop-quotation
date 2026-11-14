@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { configProvider } from "@/lib/config";
-import type { AppConfig } from "@/lib/config";
+import { configProvider, describeQuoteSource } from "@/lib/config";
+import type { AppConfig, QuoteConfigResolution } from "@/lib/config";
 import { ProductGridPicker } from "@/components/ProductGridPicker";
 import { StickySummary } from "@/components/StickySummary";
 import type { SummaryPayload } from "@/components/StickySummary";
@@ -36,21 +36,27 @@ function resolveProductId(
  * 품목 버튼 선택 → 입력 → 견적 결과 (?product= 로 품목 공유 가능)
  */
 export default function QuotePage() {
-  const [config, setConfig] = useState<AppConfig>(() => configProvider.getInitialConfig());
-  /** SSR·첫 페인트는 URL 없이 고정 → 서버/클라이언트 DOM 일치(모바일 하이드레이션 오류 방지) */
-  const [productId, setProductId] = useState(() => resolveProductId(null, config.products));
+  const [resolution, setResolution] = useState<QuoteConfigResolution | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  /** 서버 확인 전에는 품목을 고정해 서버/클라이언트 DOM을 맞춘다. */
+  const [productId, setProductId] = useState("pop");
   const [summary, setSummary] = useState<SummaryPayload>(emptySummary);
 
   useEffect(() => {
-    const urlParam =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("product")
-        : null;
-    void configProvider.getAllConfig().then((nextConfig) => {
-      setConfig(nextConfig);
-      setProductId(resolveProductId(urlParam, nextConfig.products));
+    let cancelled = false;
+    setResolution(null);
+    const urlParam = new URLSearchParams(window.location.search).get("product");
+    void configProvider.loadQuoteConfig().then((next) => {
+      if (cancelled) return;
+      setResolution(next);
+      if (next.ready) {
+        setProductId(resolveProductId(urlParam, next.config.products));
+      }
     });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
   const onSummaryChange = useCallback((payload: SummaryPayload) => {
     setSummary(payload);
@@ -73,6 +79,8 @@ export default function QuotePage() {
     /* 기존과 동일: 부모 품목은 유지, 자식 폼이 내부 상태만 초기화 */
   }, []);
 
+  const config: AppConfig | null = resolution?.ready ? resolution.config : null;
+
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
@@ -88,6 +96,26 @@ export default function QuotePage() {
         <span className="w-14" />
       </header>
       <main className="max-w-6xl mx-auto p-3 md:p-5">
+        {!resolution && (
+          <p className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-600">
+            서버 가격 설정을 확인하는 중입니다. 확인 전에는 견적 금액을 표시하지 않습니다.
+          </p>
+        )}
+        {resolution && !resolution.ready && (
+          <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-700 space-y-3">
+            <p>서버 설정을 확인하지 못했습니다. 이 브라우저에 남아 있는 이전 설정으로 견적을 확정하지 않습니다.</p>
+            <button
+              type="button"
+              onClick={() => setReloadKey((n) => n + 1)}
+              className="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm"
+            >
+              다시 확인
+            </button>
+          </div>
+        )}
+        {config && resolution?.ready && (
+          <>
+        <p className="mb-3 text-xs text-slate-500">{describeQuoteSource(resolution)}</p>
         <div className="mb-4">
           <ProductGridPicker products={config.products} value={productId} onChange={handleProductChange} />
         </div>
@@ -160,6 +188,8 @@ export default function QuotePage() {
             </div>
           </div>
         </div>
+          </>
+        )}
       </main>
     </div>
   );

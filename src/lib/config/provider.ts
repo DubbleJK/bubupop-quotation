@@ -1,13 +1,17 @@
 import type { AppConfig } from "./types";
+import type { QuoteConfigResolution } from "./resolveQuoteConfig";
 
 /**
- * V2 업그레이드: API/DB에서 설정을 가져올 때 이 인터페이스만 바꾸면 됨.
- * UI와 calc는 ConfigProvider를 통해서만 설정을 사용.
+ * UI와 calc는 ConfigProvider를 통해서만 설정을 사용한다.
  */
 export interface ConfigProvider {
-  /** 초기 렌더링용 동기 설정 (SSR/CSR 모두 안전한 기본값) */
+  /** 서버 확인 전의 코드 기본값. 브라우저 저장 견적 설정은 읽지 않는다. */
   getInitialConfig(): AppConfig;
+  /** 서버 응답을 기다린 뒤 견적에 쓸 설정을 확정한다. */
+  loadQuoteConfig(): Promise<QuoteConfigResolution>;
   getAllConfig(): Promise<AppConfig>;
-  /** 기본값 복원 시 사용할 설정 (저장된 기본값 있으면 그대로, 없으면 코드 기본값) */
+  /** 서버 저장이 성공한 공개 설정만 이 브라우저 캐시에 반영한다. */
+  rememberServerConfig(config: AppConfig): void;
+  /** 기본값 복원 템플릿. 인증 비밀값은 제외한다. */
   getDefaultConfig(): Promise<AppConfig>;
 }

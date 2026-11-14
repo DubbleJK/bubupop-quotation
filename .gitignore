@@ -21,3 +21,6 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# 견적 설정 백업. 가격이 들어 있을 수 있어 커밋하지 않는다.
+backups/
