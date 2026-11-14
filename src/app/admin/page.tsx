@@ -392,6 +392,15 @@ export default function AdminPage() {
                 className="border border-slate-300 rounded px-2 py-1"
               />
             </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">판매 단가 (원/m)</span>
+              <input
+                type="number"
+                value={s.solventSellPerM ?? s.popSellPerM4}
+                onChange={(e) => updateSettings("solventSellPerM", Number(e.target.value))}
+                className="border border-slate-300 rounded px-2 py-1"
+              />
+            </label>
           </div>
         </section>
 

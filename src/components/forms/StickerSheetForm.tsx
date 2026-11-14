@@ -56,24 +56,30 @@ export function StickerSheetForm({
 
   const a4Supply = result?.a4 && !result.a4.disabled ? result.a4.supplyPrice : undefined;
   const a3Supply = result?.a3 && !result.a3.disabled ? result.a3.supplyPrice : undefined;
+  const bothUnavailable = Boolean(result?.a4.disabled && result?.a3.disabled);
   const items = useMemo(
     () =>
-      result
+      result && !bothUnavailable
         ? [
-            ...(result.a4.disabled ? [] : [{ label: "A4 공급가", value: result.a4.supplyPrice }]),
-            ...(result.a3.disabled ? [] : [{ label: "A3 공급가", value: result.a3.supplyPrice }]),
+            result.a4.disabled
+              ? { label: "A4", value: result.a4.disabledReason ?? "배치 불가" }
+              : { label: "A4 공급가", value: result.a4.supplyPrice },
+            result.a3.disabled
+              ? { label: "A3", value: result.a3.disabledReason ?? "배치 불가" }
+              : { label: "A3 공급가", value: result.a3.supplyPrice },
           ]
         : [],
-    [result]
+    [result, bothUnavailable]
   );
 
   useEffect(() => {
     onSummaryChange?.({
-      mainValue: a4Supply ?? a3Supply,
+      mainValue: bothUnavailable ? undefined : a4Supply ?? a3Supply,
       mainLabel: "공급가 (VAT 미포함)",
       items,
+      error: bothUnavailable ? "선택한 크기는 A4와 A3에 배치할 수 없습니다." : undefined,
     });
-  }, [a4Supply, a3Supply, items, onSummaryChange]);
+  }, [a4Supply, a3Supply, bothUnavailable, items, onSummaryChange]);
 
   return (
     <div className="space-y-4">

@@ -28,9 +28,10 @@ export function StickerSolventForm({ settings, defaultGapMm, onReset, onSummaryC
     return calcStickerSolvent({ widthMm: w, heightMm: h, qty: q, gapMm: g }, settings);
   }, [widthMm, heightMm, qty, gapMm, settings]);
 
+  const failed = result?.ok === false;
   const items = useMemo(
     () =>
-      result
+      result && !failed
         ? [
             { label: "소비 길이(m)", value: result.lengthM.toFixed(2) },
             { label: "공급가", value: result.supplyPrice },
@@ -38,16 +39,17 @@ export function StickerSolventForm({ settings, defaultGapMm, onReset, onSummaryC
             { label: "총액", value: result.vatAndTotal.total },
           ]
         : [],
-    [result]
+    [result, failed]
   );
 
   useEffect(() => {
     onSummaryChange?.({
-      mainValue: result?.supplyPrice,
+      mainValue: failed ? undefined : result?.supplyPrice,
       mainLabel: "공급가 (VAT 미포함)",
       items,
+      error: failed ? result?.error : undefined,
     });
-  }, [result?.supplyPrice, items, onSummaryChange]);
+  }, [failed, result?.supplyPrice, result?.error, items, onSummaryChange]);
 
   return (
     <div className="space-y-4">
@@ -95,6 +97,7 @@ export function StickerSolventForm({ settings, defaultGapMm, onReset, onSummaryC
           />
         </div>
       </div>
+      {failed && result?.error && <p className="text-sm text-red-600">{result.error}</p>}
       <button
         type="button"
         onClick={() => {

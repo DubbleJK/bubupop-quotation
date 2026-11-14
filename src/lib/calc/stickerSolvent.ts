@@ -12,30 +12,52 @@ export interface StickerSolventInput {
 }
 
 export interface StickerSolventResult {
+  ok: boolean;
+  error?: string;
   lengthM: number;
   supplyPrice: number;
   vatAndTotal: VatAndTotal;
 }
 
+function orientationLengthMm(
+  rollW: number,
+  acrossMm: number,
+  alongMm: number,
+  qty: number,
+  gapMm: number
+): number | null {
+  const across = Math.floor(rollW / (acrossMm + gapMm));
+  if (across < 1) return null;
+  const rows = Math.ceil(qty / across);
+  return rows * (alongMm + gapMm);
+}
+
 export function calcStickerSolvent(
   input: StickerSolventInput,
-  s: Pick<Settings, "solventRollWidthMm" | "workFeeSolvent" | "popSellPerM4" | "vatRate">
+  s: Pick<Settings, "solventRollWidthMm" | "workFeeSolvent" | "solventSellPerM" | "popSellPerM4" | "vatRate">
 ): StickerSolventResult {
   const { widthMm: w, heightMm: h, qty, gapMm: g } = input;
   const rollW = s.solventRollWidthMm;
+  const sellPerM = s.solventSellPerM ?? s.popSellPerM4;
 
-  const acrossA = Math.floor(rollW / (w + g));
-  const rowsA = Math.ceil(qty / Math.max(acrossA, 1));
-  const lenA = rowsA * (h + g);
+  const lenA = orientationLengthMm(rollW, w, h, qty, g);
+  const lenB = orientationLengthMm(rollW, h, w, qty, g);
+  if (lenA == null && lenB == null) {
+    return {
+      ok: false,
+      error: `롤 폭(${rollW}mm)을 초과하여 견적할 수 없습니다.`,
+      lengthM: 0,
+      supplyPrice: 0,
+      vatAndTotal: { vat: 0, total: 0 },
+    };
+  }
 
-  const acrossB = Math.floor(rollW / (h + g));
-  const rowsB = Math.ceil(qty / Math.max(acrossB, 1));
-  const lenB = rowsB * (w + g);
-
-  const lengthM = Math.min(lenA, lenB) / 1000;
-  const supplyPrice = roundToNearest10(s.workFeeSolvent + lengthM * s.popSellPerM4);
+  const lengthMm = Math.min(...[lenA, lenB].filter((value): value is number => value != null));
+  const lengthM = lengthMm / 1000;
+  const supplyPrice = roundToNearest10(s.workFeeSolvent + lengthM * sellPerM);
 
   return {
+    ok: true,
     lengthM,
     supplyPrice,
     vatAndTotal: calcVatAndTotal(supplyPrice, s.vatRate),

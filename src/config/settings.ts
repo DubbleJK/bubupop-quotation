@@ -8,6 +8,8 @@ export const settings = {
   minStickerSupply: 20000,
   workFeeStickerSheet: 15000,
   workFeeSolvent: 15000,
+  /** 솔벤트 전용 판매 단가. 없으면 불러올 때 POP 4-cut 단가를 복사한다. */
+  solventSellPerM: 63452,
   popSellPerM4: 63452,
   popSellPerM2: 55046,
   popRollWidthMm: 610,

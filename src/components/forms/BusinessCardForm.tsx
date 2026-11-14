@@ -45,9 +45,10 @@ export function BusinessCardForm({
     businessCardDesignTiers,
   ]);
 
+  const failed = result?.ok === false;
   const items = useMemo(
     () =>
-      result
+      result && !failed
         ? result.designFee === 0
           ? [
               { label: "인쇄비 (공급가)", value: result.printPrice },
@@ -62,16 +63,17 @@ export function BusinessCardForm({
               { label: "총액", value: result.vatAndTotal.total },
             ]
         : [],
-    [result]
+    [result, failed]
   );
 
   useEffect(() => {
     onSummaryChange?.({
-      mainValue: result?.supplyPrice,
+      mainValue: failed ? undefined : result?.supplyPrice,
       mainLabel: "공급가 (VAT 미포함)",
       items,
+      error: failed ? result?.error : undefined,
     });
-  }, [result?.supplyPrice, items, onSummaryChange]);
+  }, [failed, result?.supplyPrice, result?.error, items, onSummaryChange]);
 
   return (
     <div className="space-y-4">
@@ -124,6 +126,7 @@ export function BusinessCardForm({
           ))}
         </select>
       </div>
+      {failed && result?.error && <p className="text-sm text-red-600">{result.error}</p>}
       <button
         type="button"
         onClick={() => {

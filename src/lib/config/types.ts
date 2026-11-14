@@ -8,6 +8,8 @@ export interface Settings {
   minStickerSupply: number;
   workFeeStickerSheet: number;
   workFeeSolvent: number;
+  /** 솔벤트 미터당 판매단가. 구버전 저장본에는 없을 수 있다. */
+  solventSellPerM?: number;
   popSellPerM4: number;
   popSellPerM2: number;
   popRollWidthMm: number;

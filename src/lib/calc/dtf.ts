@@ -11,6 +11,8 @@ export interface DtfInput {
 }
 
 export interface DtfResult {
+  ok: boolean;
+  error?: string;
   /** 85cm 폭 안에 한 행에 들어가는 개수 */
   itemsPerRow: number;
   /** 필요한 행 수 */
@@ -57,7 +59,24 @@ export function calcDtf(
   const straight = layout(rollWidthMm, gapMm, widthMm, heightMm, qty);
   const rotated = layout(rollWidthMm, gapMm, heightMm, widthMm, qty);
 
-  const useRotated = rotated.lengthM < straight.lengthM;
+  const straightOk = Number.isFinite(straight.lengthM);
+  const rotatedOk = Number.isFinite(rotated.lengthM);
+  if (!straightOk && !rotatedOk) {
+    return {
+      ok: false,
+      error: `롤 폭(${rollWidthMm}mm)에 배치할 수 없습니다.`,
+      itemsPerRow: 0,
+      rows: 0,
+      lengthM: 0,
+      rotated: false,
+      supplyPrice: 0,
+      vatAndTotal: { vat: 0, total: 0 },
+      costReference: 0,
+      estimatedMinutes: 0,
+    };
+  }
+
+  const useRotated = rotatedOk && (!straightOk || rotated.lengthM < straight.lengthM);
   const chosen = useRotated ? rotated : straight;
 
   const lengthM = chosen.lengthM;
@@ -66,6 +85,7 @@ export function calcDtf(
   const estimatedMinutes = Math.ceil(lengthM * s.dtfMinutesPerM);
 
   return {
+    ok: true,
     itemsPerRow: chosen.itemsPerRow,
     rows: chosen.rows,
     lengthM,
@@ -74,5 +94,44 @@ export function calcDtf(
     vatAndTotal: calcVatAndTotal(supplyPrice, s.vatRate),
     costReference,
     estimatedMinutes,
+  };
+}
+
+export type DtfCombined =
+  | { ok: false; error: string; count: number }
+  | {
+      ok: true;
+      count: number;
+      lengthM: number;
+      supplyPrice: number;
+      vatAndTotal: VatAndTotal;
+      costReference: number;
+      estimatedMinutes: number;
+    };
+
+/** 완성된 디자인 중 하나라도 배치 불가면 합산 금액을 만들지 않는다. 미입력 행(null)은 제외한다. */
+export function combineDtfResults(
+  results: Array<DtfResult | null>,
+  vatRate: number
+): DtfCombined | null {
+  const completed = results.filter((row): row is DtfResult => row != null);
+  if (completed.length === 0) return null;
+  const failed = completed.find((row) => !row.ok);
+  if (failed) {
+    return {
+      ok: false,
+      error: failed.error ?? "배치할 수 없는 디자인이 있습니다.",
+      count: completed.length,
+    };
+  }
+  const supplyPrice = completed.reduce((sum, row) => sum + row.supplyPrice, 0);
+  return {
+    ok: true,
+    count: completed.length,
+    lengthM: completed.reduce((sum, row) => sum + row.lengthM, 0),
+    supplyPrice,
+    vatAndTotal: calcVatAndTotal(supplyPrice, vatRate),
+    costReference: completed.reduce((sum, row) => sum + row.costReference, 0),
+    estimatedMinutes: completed.reduce((sum, row) => sum + row.estimatedMinutes, 0),
   };
 }

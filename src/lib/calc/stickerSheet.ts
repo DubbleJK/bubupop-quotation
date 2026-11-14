@@ -44,7 +44,7 @@ function perSheetCapacity(
 ): number {
   const perA = Math.floor(sheetW / (stickerW + gap)) * Math.floor(sheetH / (stickerH + gap));
   const perB = Math.floor(sheetW / (stickerH + gap)) * Math.floor(sheetH / (stickerW + gap));
-  return Math.max(perA, perB, 1);
+  return Math.max(perA, perB);
 }
 
 export function calcStickerSheet(
@@ -84,6 +84,17 @@ export function calcStickerSheet(
       };
     }
     const perSheet = perSheetCapacity(sheetW, sheetH, w, h, gap);
+    if (perSheet < 1) {
+      return {
+        perSheet: 0,
+        sheets: 0,
+        minutes: 0,
+        supplyPrice: 0,
+        vatAndTotal: { vat: 0, total: 0 },
+        disabled: true,
+        disabledReason: "이 용지에 배치할 수 없습니다.",
+      };
+    }
     const sheets = Math.ceil(qty / perSheet);
     const minutes = Math.ceil((sheets * secPerSheet) / 60);
     const supplyPrice = roundToNearest10(

@@ -47,6 +47,10 @@ export function normalizeConfig(config: AppConfig): AppConfig {
   const next = cloneConfig(config);
   next.products = mergeProductCatalog(next.products);
   next.businessCardDesignTiers = ensureOutputOnlyTier(next.businessCardDesignTiers ?? []);
+  const solventRate = next.settings.solventSellPerM;
+  if (typeof solventRate !== "number" || !Number.isFinite(solventRate)) {
+    next.settings.solventSellPerM = next.settings.popSellPerM4;
+  }
   return next;
 }
 

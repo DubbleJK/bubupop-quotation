@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { calcDtf } from "@/lib/calc/dtf";
-import { calcVatAndTotal } from "@/lib/calc/common";
+import { calcDtf, combineDtfResults } from "@/lib/calc/dtf";
 import type { Settings } from "@/lib/config/types";
 import type { SummaryPayload } from "../StickySummary";
 
@@ -69,24 +68,14 @@ export function DtfForm({ settings, onReset, onSummaryChange }: DtfFormProps) {
     });
   }, [items, settings]);
 
-  const totalResult = useMemo(() => {
-    const valid = results.filter((r): r is NonNullable<typeof r> => r != null);
-    if (valid.length === 0) return null;
-    const supplyPrice = valid.reduce((s, r) => s + r.supplyPrice, 0);
-    const vatAndTotal = calcVatAndTotal(supplyPrice, settings.vatRate);
-    return {
-      count: valid.length,
-      lengthM: valid.reduce((s, r) => s + r.lengthM, 0),
-      supplyPrice,
-      vatAndTotal,
-      costReference: valid.reduce((s, r) => s + r.costReference, 0),
-      estimatedMinutes: valid.reduce((s, r) => s + r.estimatedMinutes, 0),
-    };
-  }, [results, settings.vatRate]);
+  const totalResult = useMemo(
+    () => combineDtfResults(results, settings.vatRate),
+    [results, settings.vatRate]
+  );
 
   const summaryItems = useMemo(
     () =>
-      totalResult
+      totalResult?.ok
         ? [
             { label: "항목 수", value: `${totalResult.count}개 디자인` },
             { label: "총 사용 길이", value: `${totalResult.lengthM.toFixed(2)}m` },
@@ -102,11 +91,12 @@ export function DtfForm({ settings, onReset, onSummaryChange }: DtfFormProps) {
 
   useEffect(() => {
     onSummaryChange?.({
-      mainValue: totalResult?.supplyPrice,
+      mainValue: totalResult?.ok ? totalResult.supplyPrice : undefined,
       mainLabel: "공급가 (VAT 미포함)",
       items: summaryItems,
+      error: totalResult && !totalResult.ok ? totalResult.error : undefined,
     });
-  }, [totalResult?.supplyPrice, summaryItems, onSummaryChange]);
+  }, [totalResult, summaryItems, onSummaryChange]);
 
   return (
     <div className="space-y-4">
@@ -166,13 +156,15 @@ export function DtfForm({ settings, onReset, onSummaryChange }: DtfFormProps) {
                 </svg>
               </button>
             )}
-            {results[index] != null && (
+            {results[index]?.ok === false ? (
+              <p className="w-full text-xs text-red-600 mt-1">{results[index]!.error}</p>
+            ) : results[index] != null ? (
               <p className="w-full text-xs text-slate-500 mt-1">
                 {results[index]!.rotated ? "눕혀서 배치 적용 · " : ""}
                 {results[index]!.lengthM.toFixed(2)}m
-                {totalResult && totalResult.count > 1 && ` → ${results[index]!.supplyPrice.toLocaleString()}원`}
+                {totalResult?.ok && totalResult.count > 1 && ` → ${results[index]!.supplyPrice.toLocaleString()}원`}
               </p>
-            )}
+            ) : null}
           </div>
         ))}
 
@@ -188,7 +180,10 @@ export function DtfForm({ settings, onReset, onSummaryChange }: DtfFormProps) {
         </button>
       </div>
 
-      {totalResult && totalResult.count > 1 && (
+      {totalResult && !totalResult.ok && (
+        <p className="text-sm text-red-600">{totalResult.error} 전체 합산 견적은 확정하지 않습니다.</p>
+      )}
+      {totalResult?.ok && totalResult.count > 1 && (
         <p className="text-xs text-slate-500">
           디자인 {totalResult.count}개 합산 · 총 {totalResult.lengthM.toFixed(2)}m 기준 견적
         </p>

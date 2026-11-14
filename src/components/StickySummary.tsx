@@ -21,6 +21,7 @@ export type SummaryPayload = Pick<
 >;
 
 function formatKr(n: number): string {
+  if (!Number.isFinite(n)) return "견적 불가";
   return new Intl.NumberFormat("ko-KR").format(n) + "원";
 }
 
@@ -37,12 +38,12 @@ export function StickySummary({
       {error && (
         <p className="text-red-600 text-sm mb-2">{error}</p>
       )}
-      {mainValue !== undefined && mainValue !== "" && (
+      {!error && mainValue !== undefined && mainValue !== "" && (typeof mainValue !== "number" || Number.isFinite(mainValue)) && (
         <p className="text-2xl font-bold text-slate-900 mb-2">
           {typeof mainValue === "number" ? formatKr(mainValue) : mainValue}
         </p>
       )}
-      {mainLabel && mainValue !== undefined && mainValue !== "" && (
+      {!error && mainLabel && mainValue !== undefined && mainValue !== "" && (typeof mainValue !== "number" || Number.isFinite(mainValue)) && (
         <p className="text-xs text-slate-500 mb-3">{mainLabel}</p>
       )}
       <ul className="space-y-1 text-sm">

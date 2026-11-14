@@ -17,6 +17,7 @@ export interface PopResultItem {
 }
 
 export interface PopResult {
+  ok: boolean;
   error?: string;
   lengthMm: number;
   lengthM: number;
@@ -35,7 +36,8 @@ export function calcPop(
 
   if (w > rollWidth && h > rollWidth) {
     return {
-      error: "폭 초과(610mm) - 사이즈 확인",
+      ok: false,
+      error: `폭 초과(${rollWidth}mm) - 사이즈 확인`,
       lengthMm: 0,
       lengthM: 0,
       supply4Cut: 0,
@@ -59,6 +61,7 @@ export function calcPop(
   const supply2Cut = roundToNearest10(lengthM * s.popSellPerM2);
 
   return {
+    ok: true,
     lengthMm,
     lengthM,
     supply4Cut,

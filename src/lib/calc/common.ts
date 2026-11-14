@@ -10,10 +10,15 @@ export interface VatAndTotal {
   total: number;
 }
 
+export const EMPTY_VAT: VatAndTotal = { vat: 0, total: 0 };
+
 export function calcVatAndTotal(
   supplyPrice: number,
   vatRate: number
 ): VatAndTotal {
+  if (!Number.isFinite(supplyPrice) || !Number.isFinite(vatRate)) {
+    return { ...EMPTY_VAT };
+  }
   const vat = roundToNearest10(supplyPrice * vatRate);
   const total = roundToNearest10(supplyPrice + vat);
   return { vat, total };
