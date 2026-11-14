@@ -7,6 +7,7 @@ import { configProvider } from "@/lib/config";
 import type { AppConfig } from "@/lib/config";
 import { ADMIN_DEFAULT_CONFIG_KEY } from "@/lib/config/storageKeys";
 import { toPublicConfig } from "@/lib/config/publicConfig";
+import { CostWorkspace, type CostTab } from "@/components/admin/CostWorkspace";
 
 interface AppliedConfigInfo {
   source: "server" | "default";
@@ -20,14 +21,25 @@ interface SaveResult {
 }
 
 /**
- * 관리자 페이지: 원가·마진률 확인 및 수정.
+ * 관리자 페이지. 판매가격은 기존 화면이고, 원가·공정·수익성은 별도 메뉴다.
  * 로그인 세션은 서버 쿠키로 확인하고, 견적 설정은 서버 저장이 성공한 뒤에만 반영한다.
  */
+const ADMIN_TABS: { id: CostTab | "sale"; label: string }[] = [
+  { id: "sale", label: "판매가격" },
+  { id: "materials", label: "원자재" },
+  { id: "processes", label: "제작 공정" },
+  { id: "products", label: "판매 품목" },
+  { id: "profit", label: "수익성" },
+  { id: "history", label: "견적 이력" },
+  { id: "deploy", label: "배포 점검" },
+];
+
 export default function AdminPage() {
   const router = useRouter();
   const [editing, setEditing] = useState<AppConfig | null>(null);
   const [applied, setApplied] = useState<AppliedConfigInfo | null>(null);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
+  const [tab, setTab] = useState<CostTab | "sale">("sale");
   const [defaultSaved, setDefaultSaved] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -221,8 +233,8 @@ export default function AdminPage() {
         <Link href="/" className="text-slate-600 hover:text-slate-800 text-sm">
           ← 첫 화면
         </Link>
-        <h1 className="text-xl font-semibold text-slate-800">관리자 · 원가/마진 설정</h1>
-        <div className="flex items-center gap-2 flex-wrap">
+        <h1 className="text-xl font-semibold text-slate-800">관리자</h1>
+        <div className={`flex items-center gap-2 flex-wrap ${tab === "sale" ? "" : "hidden"}`}>
           <button
             type="button"
             onClick={handleSaveAsDefault}
@@ -246,7 +258,21 @@ export default function AdminPage() {
           </button>
         </div>
       </header>
-      <p className="bg-white border-b border-slate-200 px-4 py-2 text-xs text-slate-600">
+      <nav className="bg-white border-b border-slate-200 px-4 py-2 flex gap-2 overflow-x-auto">
+        {ADMIN_TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={`text-sm px-3 py-1.5 rounded-lg whitespace-nowrap ${
+              tab === item.id ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      <p className={`bg-white border-b border-slate-200 px-4 py-2 text-xs text-slate-600 ${tab === "sale" ? "" : "hidden"}`}>
         {applied
           ? `적용 중: ${applied.source === "server" ? "서버 설정" : "코드 기본값"} · 버전 ${applied.revision}${
               applied.updatedAt ? ` · ${applied.updatedAt}` : ""
@@ -254,7 +280,8 @@ export default function AdminPage() {
           : "설정을 불러오는 중입니다."}
         {saveResult ? ` · 마지막 저장: ${saveResult.text}` : ""}
       </p>
-      <main className="max-w-3xl mx-auto p-4 md:p-6 space-y-8">
+      <CostWorkspace tab={tab} />
+      <main className={`max-w-3xl mx-auto p-4 md:p-6 space-y-8 ${tab === "sale" ? "" : "hidden"}`}>
         {/* 공통 */}
         <section className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-700 mb-3">공통</h2>
