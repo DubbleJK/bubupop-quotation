@@ -4,7 +4,7 @@ export const ADMIN_COOKIE_NAME = "quotation_admin_session";
 const DEV_FALLBACK_SECRET = "dev-only-quotation-admin-session";
 const MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
-/** 프로덕션에서는 ADMIN_SESSION_SECRET(16자 이상)이 있어야 세션을 발급한다. */
+/** 프로덕션에서는 16자 이상인 세션 비밀값이 실행 시점에 있어야 로그인 세션을 발급한다. */
 export function sessionSecret(): string | null {
   const env = process.env["ADMIN_SESSION_SECRET"];
   if (typeof env === "string" && env.length >= 16) return env;
