@@ -15,6 +15,7 @@ import { TshirtForm } from "@/components/forms/TshirtForm";
 import { BusinessCardForm } from "@/components/forms/BusinessCardForm";
 import { BannerForm } from "@/components/forms/BannerForm";
 import { PORTAL_URL } from "@/lib/portalUrl";
+import { listedLegacyIds, type PublicCatalog } from "@/lib/cost/publicCatalog";
 
 const emptySummary: SummaryPayload = {
   mainValue: undefined,
@@ -22,14 +23,6 @@ const emptySummary: SummaryPayload = {
   items: [],
   error: undefined,
 };
-
-function resolveProductId(
-  param: string | null,
-  products: AppConfig["products"]
-): string {
-  if (param && products.some((p) => p.id === param)) return param;
-  return products[0]?.id ?? "pop";
-}
 
 /**
  * 일반 페이지: 견적 계산만 가능
@@ -41,6 +34,29 @@ export default function QuotePage() {
   /** 서버 확인 전에는 품목을 고정해 서버/클라이언트 DOM을 맞춘다. */
   const [productId, setProductId] = useState("pop");
   const [summary, setSummary] = useState<SummaryPayload>(emptySummary);
+  const [publicIds, setPublicIds] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/catalog")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("catalog"))))
+      .then((data: { catalog?: PublicCatalog }) => {
+        if (!cancelled && data.catalog) setPublicIds(listedLegacyIds(data.catalog));
+      })
+      .catch(() => {
+        if (!cancelled) setPublicIds(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!publicIds || publicIds.length === 0) return;
+    const urlParam = new URLSearchParams(window.location.search).get("product");
+    if (urlParam) return;
+    if (!publicIds.includes(productId)) setProductId(publicIds[0] ?? "pop");
+  }, [publicIds, productId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,8 +65,8 @@ export default function QuotePage() {
     void configProvider.loadQuoteConfig().then((next) => {
       if (cancelled) return;
       setResolution(next);
-      if (next.ready) {
-        setProductId(resolveProductId(urlParam, next.config.products));
+      if (next.ready && urlParam && next.config.products.some((item) => item.id === urlParam)) {
+        setProductId(urlParam);
       }
     });
     return () => {
@@ -117,7 +133,11 @@ export default function QuotePage() {
           <>
         <p className="mb-3 text-xs text-slate-500">{describeQuoteSource(resolution)}</p>
         <div className="mb-4">
-          <ProductGridPicker products={config.products} value={productId} onChange={handleProductChange} />
+          <ProductGridPicker
+            products={publicIds ? config.products.filter((item) => publicIds.includes(item.id) || item.id === productId) : config.products}
+            value={productId}
+            onChange={handleProductChange}
+          />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">

@@ -215,6 +215,7 @@ export function duplicateRecipe(library: CostLibrary, productId: string): CostLi
     label: `${source.label} 복사`,
     legacyQuoteId: undefined,
     showOnCustomerQuote: false,
+    customerVisible: false,
     approvedSupplyPrice: undefined,
     lines: source.lines.map((line) => ({ ...line, lineId: newCostId("line") })),
   };

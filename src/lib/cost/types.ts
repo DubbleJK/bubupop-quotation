@@ -179,6 +179,13 @@ export interface ProductRecipe {
   approvedSupplyPrice?: number;
   /** 새 품목을 고객 목록에 올릴 준비. 기존 8개 견적 분기는 이 값과 무관하다. */
   showOnCustomerQuote: boolean;
+  /**
+   * 고객 첫 화면 표시. false면 숨긴다.
+   * 비우면 기존 8개 품목만 표시하고, 새로 만든 품목은 숨긴다.
+   */
+  customerVisible?: boolean;
+  /** 고객 첫 화면에 보이는 설명. 원가와 이익률은 적지 않는다. */
+  description?: string;
   /** 이 수량보다 많으면 생산·납기 확인 경고만 낸다. */
   reviewAboveQty?: number;
   groupId?: string;
