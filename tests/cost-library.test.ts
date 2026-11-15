@@ -67,21 +67,29 @@ function libraryWith(
 }
 
 describe("원가 라이브러리", () => {
-  it("목표 이익률 25%는 가산율 25%와 다른 13,330원이다", () => {
+  it("목표 이익률 25%는 가산율 25%와 다르고 10원 단위로 올린 13,340원이다", () => {
     const band = recommendSupply(10000, 0.25, 0.1);
-    expect(band.supplyPrice).toBe(13330);
+    expect(band.supplyPrice).toBe(13340);
     expect(band.supplyPrice).not.toBe(12500);
-    expect(band.profit).toBe(3330);
+    expect(band.supplyPrice).not.toBe(13330);
+    expect(band.profit).toBe(3340);
+  });
+
+  it("191,471원의 35% 추천 공급가는 294,580원이고 20%는 239,340원이다", () => {
+    expect(recommendSupply(191471, 0.35, 0.1).supplyPrice).toBe(294580);
+    expect(recommendSupply(191471, 0.2, 0.1).supplyPrice).toBe(239340);
+    expect(recommendSupply(2500, 0, 0.1).supplyPrice).toBe(2500);
   });
 
   it("롤 환산과 로스 5%의 공급원가는 5,263원이다", () => {
     const config = getFileConfig();
     const result = simulatePricing(
-      libraryWith([material()]),
+      libraryWith([material()], [], [{ lineId: "line-film", refId: "film", kind: "material", usage: "per-piece", times: 2.5 }]),
       config,
       { productId: "pop", qty: 1, widthMm: 100, heightMm: 2500 },
       asOf
     );
+    expect(result.lines[0]?.usageNote).toContain("가로·세로");
     expect(result.lines[0]?.supplyCost).toBe(5263);
     expect(result.target?.supplyPrice).toBe(recommendSupply(5263, 0.25, 0.1).supplyPrice);
   });
@@ -90,7 +98,7 @@ describe("원가 라이브러리", () => {
     const config = getFileConfig();
     const missingWaste = material({ wasteRate: undefined, wasteStatus: "unconfirmed" });
     const result = simulatePricing(
-      libraryWith([missingWaste]),
+      libraryWith([missingWaste], [], [{ lineId: "line-film", refId: "film", kind: "material", usage: "per-piece" }]),
       config,
       { productId: "pop", qty: 1, widthMm: 100, heightMm: 2500 },
       asOf

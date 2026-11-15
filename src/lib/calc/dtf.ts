@@ -27,6 +27,15 @@ export interface DtfResult {
   estimatedMinutes: number;
 }
 
+export interface RollPlacement {
+  ok: boolean;
+  error?: string;
+  itemsPerRow: number;
+  rows: number;
+  lengthM: number;
+  rotated: boolean;
+}
+
 /** 롤 폭 방향 크기 w, 진행 방향 크기 h 일 때 레이아웃 결과. w가 롤 폭을 넘으면 사용 불가(Infinity 반환). */
 function layout(
   rollWidthMm: number,
@@ -44,6 +53,40 @@ function layout(
   return { itemsPerRow, rows, lengthM: totalLengthMm / 1000 };
 }
 
+/** 고객 DTF 판매가와 원가 배치가 같은 규칙을 쓴다. 로스율은 여기서 넣지 않는다. */
+export function placeOnRoll(input: {
+  rollWidthMm: number;
+  gapMm: number;
+  widthMm: number;
+  heightMm: number;
+  qty: number;
+}): RollPlacement {
+  const { rollWidthMm, gapMm, widthMm, heightMm, qty } = input;
+  const straight = layout(rollWidthMm, gapMm, widthMm, heightMm, qty);
+  const rotated = layout(rollWidthMm, gapMm, heightMm, widthMm, qty);
+  const straightOk = Number.isFinite(straight.lengthM);
+  const rotatedOk = Number.isFinite(rotated.lengthM);
+  if (!straightOk && !rotatedOk) {
+    return {
+      ok: false,
+      error: `롤 폭(${rollWidthMm}mm)에 배치할 수 없습니다.`,
+      itemsPerRow: 0,
+      rows: 0,
+      lengthM: 0,
+      rotated: false,
+    };
+  }
+  const useRotated = rotatedOk && (!straightOk || rotated.lengthM < straight.lengthM);
+  const chosen = useRotated ? rotated : straight;
+  return {
+    ok: true,
+    itemsPerRow: chosen.itemsPerRow,
+    rows: chosen.rows,
+    lengthM: chosen.lengthM,
+    rotated: useRotated,
+  };
+}
+
 export function calcDtf(
   input: DtfInput,
   s: Pick<
@@ -54,17 +97,11 @@ export function calcDtf(
   const { widthMm, heightMm, qty } = input;
   const rollWidthMm = s.dtfRollWidthMm ?? 850;
   const gapMm = s.dtfGapMm ?? 7;
-
-  // 직배치(가로×세로) vs 눕힌 배치(세로×가로) 중 사용 길이가 짧은 쪽 선택
-  const straight = layout(rollWidthMm, gapMm, widthMm, heightMm, qty);
-  const rotated = layout(rollWidthMm, gapMm, heightMm, widthMm, qty);
-
-  const straightOk = Number.isFinite(straight.lengthM);
-  const rotatedOk = Number.isFinite(rotated.lengthM);
-  if (!straightOk && !rotatedOk) {
+  const placed = placeOnRoll({ rollWidthMm, gapMm, widthMm, heightMm, qty });
+  if (!placed.ok) {
     return {
       ok: false,
-      error: `롤 폭(${rollWidthMm}mm)에 배치할 수 없습니다.`,
+      error: placed.error,
       itemsPerRow: 0,
       rows: 0,
       lengthM: 0,
@@ -76,20 +113,17 @@ export function calcDtf(
     };
   }
 
-  const useRotated = rotatedOk && (!straightOk || rotated.lengthM < straight.lengthM);
-  const chosen = useRotated ? rotated : straight;
-
-  const lengthM = chosen.lengthM;
+  const lengthM = placed.lengthM;
   const supplyPrice = roundToNearest10(lengthM * s.dtfSellPerM);
   const costReference = roundToNearest10(lengthM * s.dtfCostPerM);
   const estimatedMinutes = Math.ceil(lengthM * s.dtfMinutesPerM);
 
   return {
     ok: true,
-    itemsPerRow: chosen.itemsPerRow,
-    rows: chosen.rows,
+    itemsPerRow: placed.itemsPerRow,
+    rows: placed.rows,
     lengthM,
-    rotated: useRotated,
+    rotated: placed.rotated,
     supplyPrice,
     vatAndTotal: calcVatAndTotal(supplyPrice, s.vatRate),
     costReference,

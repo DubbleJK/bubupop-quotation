@@ -52,6 +52,8 @@ export interface MaterialCost {
   usageUnit: UsageUnit;
   /** 구매단위 1개에 들어 있는 사용단위 수량. 단위가 같으면 1. */
   conversion?: number;
+  /** 롤 배치에 쓰는 폭. 규격 글자와 별개이며, 비우면 배치 견적을 만들지 않는다. */
+  rollWidthMm?: number;
   conversionStatus: "confirmed" | "unconfirmed";
   price: CostAmount;
   /** 수량 구간 매입가. 있으면 그 구간의 사용단위 단가를 쓴다. */

@@ -68,12 +68,13 @@ function shop(): CostLibrary {
         conversion: 100,
         conversionStatus: "confirmed",
         price: money(80000, "krw-per-m"),
+        rollWidthMm: 850,
         wasteRate: 0.05,
         wasteStatus: "confirmed",
       }),
       material({ id: "paper", label: "아트지", purchaseUnit: "sheet", usageUnit: "sheet", price: money(500, "krw-per-sheet") }),
-      material({ id: "solvent-media", label: "솔벤트 원단", purchaseUnit: "m", usageUnit: "m", price: money(4000, "krw-per-m") }),
-      material({ id: "pop-media", label: "POP 원단", purchaseUnit: "m", usageUnit: "m", price: money(6000, "krw-per-m") }),
+      material({ id: "solvent-media", label: "솔벤트 원단", purchaseUnit: "m", usageUnit: "m", rollWidthMm: 620, price: money(4000, "krw-per-m") }),
+      material({ id: "pop-media", label: "POP 원단", purchaseUnit: "m", usageUnit: "m", rollWidthMm: 610, price: money(6000, "krw-per-m") }),
       material({ id: "acrylic", label: "아크릴", price: money(1500) }),
       material({ id: "card-paper", label: "명함용지", price: money(80) }),
       material({ id: "banner-media", label: "배너 원단", price: money(8000) }),
@@ -174,7 +175,7 @@ describe("조립식 가상 견적", () => {
     let fail = 0;
     let warning = 0;
     for (const item of library.recipes) {
-      const rows = compareQuantities(library, config, { productId: item.productId, qty: 1, ...sizes[item.productId] }, qtys, asOf);
+      const rows = compareQuantities(library, config, { productId: item.productId, qty: 1, gapMm: 7, ...sizes[item.productId] }, qtys, asOf);
       for (const row of rows) {
         const finitePrice = Number.isFinite(row.recommendedSupply) && Number.isFinite(row.supplyCost);
         if (!finitePrice || row.status === "missing") fail += 1;
@@ -194,8 +195,8 @@ describe("조립식 가상 견적", () => {
   it("수량 구간 매입가는 그 수량의 단가만 쓰고 판매가는 바꾸지 않는다", () => {
     const library = shop();
     const config = getFileConfig();
-    const low = simulatePricing(library, config, { productId: "dtf-shirt", qty: 49, widthMm: 100, heightMm: 100 }, asOf);
-    const high = simulatePricing(library, config, { productId: "dtf-shirt", qty: 50, widthMm: 100, heightMm: 100 }, asOf);
+    const low = simulatePricing(library, config, { productId: "dtf-shirt", qty: 49, widthMm: 100, heightMm: 100, gapMm: 7 }, asOf);
+    const high = simulatePricing(library, config, { productId: "dtf-shirt", qty: 50, widthMm: 100, heightMm: 100, gapMm: 7 }, asOf);
     const teeLow = low.lines.find((line) => line.name === "면 티셔츠")?.supplyCost;
     const teeHigh = high.lines.find((line) => line.name === "면 티셔츠")?.supplyCost;
     expect(teeLow).toBe(49 * 3000);
@@ -207,7 +208,7 @@ describe("조립식 가상 견적", () => {
     const library = shop();
     const config = getFileConfig();
     const tee = config.tshirtTypes.find((row) => row.id === "short");
-    const rows = compareQuantities(library, config, { productId: "dtf-shirt", qty: 1, widthMm: 100, heightMm: 100 }, [49, 50, 99, 100], asOf);
+    const rows = compareQuantities(library, config, { productId: "dtf-shirt", qty: 1, widthMm: 100, heightMm: 100, gapMm: 7 }, [49, 50, 99, 100], asOf);
     expect(rows.find((row) => row.qty === 50)?.status).toBe("inversion");
     expect(rows.find((row) => row.qty === 100)?.status).toBe("inversion");
     const shirt49 = tee ? calcTshirt({ typeId: "short", qty: 49, numberOf2XLPlus: 0 }, config.settings, tee, config.tshirtSizeUpPer2XL, config.tshirtDiscountTiers).supplyPrice : 0;
@@ -223,7 +224,7 @@ describe("조립식 가상 견적", () => {
       blank.price = { ...blank.price, amount: undefined, status: "unconfirmed" };
       blank.purchaseTiers = undefined;
     }
-    const result = simulatePricing(library, getFileConfig(), { productId: "eco-bag", qty: 10, widthMm: 100, heightMm: 100 }, asOf);
+    const result = simulatePricing(library, getFileConfig(), { productId: "eco-bag", qty: 10, widthMm: 100, heightMm: 100, gapMm: 7 }, asOf);
     expect(result.target?.supplyPrice).toBeUndefined();
     expect(result.missing.some((line) => line.includes("에코백"))).toBe(true);
     expect(result.approvalAllowed).toBe(false);
@@ -242,15 +243,17 @@ describe("조립식 가상 견적", () => {
   it("필름을 원자재로 붙이지 않으면 출력 공정이 필름비를 더하지 않는다", () => {
     const library = shop();
     const config = getFileConfig();
-    const both = simulatePricing(library, config, { productId: "film-only", qty: 10, widthMm: 100, heightMm: 100 }, asOf);
+    const both = simulatePricing(library, config, { productId: "film-only", qty: 10, widthMm: 100, heightMm: 100, gapMm: 7 }, asOf);
     const printOnly = simulatePricing(
       { ...library, recipes: library.recipes.map((row) => row.productId === "film-only" ? { ...row, lines: row.lines.filter((line) => line.refId === "dtf-print") } : row) },
       config,
-      { productId: "film-only", qty: 10, widthMm: 100, heightMm: 100 },
+      { productId: "film-only", qty: 10, widthMm: 100, heightMm: 100, gapMm: 7 },
       asOf
     );
     expect(both.lines).toHaveLength(2);
-    expect((printOnly.supplyCost ?? 0) < (both.supplyCost ?? 0)).toBe(true);
+    expect(both.supplyCost).toBeGreaterThan(0);
+    expect(printOnly.supplyCost).toBeUndefined();
+    expect(printOnly.missing.join(" ")).toContain("롤 폭");
     expect(printOnly.lines.map((line) => line.name)).toEqual(["DTF 출력"]);
   });
 

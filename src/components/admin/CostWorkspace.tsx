@@ -484,6 +484,12 @@ function MaterialFields({ row, update }: { row: MaterialCost; update: (patch: Pa
           <input className={fieldClass} type="number" placeholder="예: 롤이면 100" value={row.conversion ?? ""} onChange={(e) => update({ conversion: optionalNumber(e.target.value), conversionStatus: e.target.value.trim() === "" ? "unconfirmed" : "confirmed" })} />
         </label>
       )}
+      {(row.purchaseUnit === "roll" || row.usageUnit === "m") && (
+        <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">롤 폭 (mm)
+          <input className={fieldClass} type="number" placeholder="예: 600. 배치 견적에만 사용" value={row.rollWidthMm ?? ""} onChange={(e) => update({ rollWidthMm: optionalNumber(e.target.value) })} />
+          <span>규격 글자와 별개입니다. 비우면 롤 배치 견적을 만들지 않습니다.</span>
+        </label>
+      )}
       <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">버리는 비율 (%) (필수)
         <input className={fieldClass} type="number" step="0.1" placeholder="안 버리면 0, 5%면 5" value={percentText(row.wasteRate)} onChange={(e) => {
           const percent = optionalNumber(e.target.value);
@@ -750,6 +756,12 @@ function RecipeLines({
           </table>
         </div>
       )}
+      {recipe.lines.some((line) => line.usage === "per-piece") && (
+        <p className="text-xs text-slate-500">개당 고정 사용량은 적용 횟수만큼만 씁니다. 가로·세로는 그 줄에 반영되지 않습니다.</p>
+      )}
+      {recipe.lines.some((line) => line.usage === "per-meter-layout") && (
+        <p className="text-xs text-slate-500">롤 배치 사용량은 롤 폭, 가로, 세로, 간격이 모두 있어야 합니다. 하나라도 없으면 추천가를 만들지 않습니다.</p>
+      )}
       <p className="text-sm text-slate-800">
         원자재 원가 {sumOf(materialLines) == null ? "원가 미등록" : won(sumOf(materialLines) ?? undefined)}
         {" · "}
@@ -960,6 +972,7 @@ function QuotePanel({
   const [qty, setQty] = useState(10);
   const [widthMm, setWidthMm] = useState(200);
   const [heightMm, setHeightMm] = useState(200);
+  const [gapText, setGapText] = useState("");
   const [result, setResult] = useState<PricingResult | null>(null);
   const [saleRevision, setSaleRevision] = useState<number | null>(null);
   const [drops, setDrops] = useState<{ qty: number; price: number; previous: number }[]>([]);
@@ -974,7 +987,7 @@ function QuotePanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         library,
-        input: { productId, qty, widthMm, heightMm },
+        input: { productId, qty, widthMm, heightMm, gapMm: gapText.trim() === "" ? undefined : Number(gapText) },
         qtys: qtyText.split(",").map((item) => Number(item.trim())).filter((item) => Number.isFinite(item) && item >= 1),
       }),
     });
@@ -1004,7 +1017,7 @@ function QuotePanel({
     const res = await fetch("/api/admin/pricing-approval", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirm: true, input: { productId, qty, widthMm, heightMm } }),
+      body: JSON.stringify({ confirm: true, input: { productId, qty, widthMm, heightMm, gapMm: gapText.trim() === "" ? undefined : Number(gapText) } }),
     });
     const data = (await res.json().catch(() => ({}))) as { library?: CostLibrary; error?: string };
     if (!res.ok || !data.library) {
@@ -1028,7 +1041,7 @@ function QuotePanel({
       body: JSON.stringify({
         entry: {
           productId,
-          input: { qty, widthMm, heightMm },
+          input: { qty, widthMm, heightMm, gapMm: gapText.trim() === "" ? undefined : Number(gapText) },
           salePolicyRevision: saleRevision ?? 0,
           costLibraryRevision: result.costLibraryRevision,
           marginPolicyRevision: 0,
@@ -1058,11 +1071,14 @@ function QuotePanel({
         <NumberField label="가로 mm" value={widthMm} onChange={setWidthMm} />
         <NumberField label="세로 mm" value={heightMm} onChange={setHeightMm} />
       </div>
+      <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">배치 간격 mm
+        <input className={fieldClass} type="number" placeholder="롤 배치에만 필요. 비우면 배치 견적 없음" value={gapText} onChange={(e) => setGapText(e.target.value)} />
+      </label>
       <label className="flex flex-col gap-1 text-xs text-slate-500">
         비교할 수량
         <input className={fieldClass} value={qtyText} onChange={(e) => setQtyText(e.target.value)} />
       </label>
-      <p className="text-xs text-slate-500">길이가 필요하면 세로를 진행 방향으로 봅니다. 시트는 A4에 몇 장 들어가는지로 셉니다.</p>
+      <p className="text-xs text-slate-500">개당 고정 사용량은 가로·세로를 쓰지 않습니다. 롤 배치는 롤 폭과 간격이 있을 때만 길이를 계산하고, 로스는 그 길이에 한 번만 적용합니다.</p>
       <button type="button" onClick={() => void run()} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm">
         견적 계산
       </button>
@@ -1108,6 +1124,7 @@ function QuotePanel({
                 <li key={line.lineId}>
                   {line.kind === "material" ? "원자재" : "제작 공정"} · {line.name} · {line.usageQty ?? "—"}
                   {line.unitLabel ?? ""} · {costText(line.status, line.reason, line.supplyCost)}
+                  {line.usageNote ? <span className="block text-xs text-slate-500">{line.usageNote}</span> : null}
                 </li>
               ))}
             </ul>
@@ -1115,6 +1132,7 @@ function QuotePanel({
             <p>제작 공정 원가 {kindSum(result, "process")}</p>
             <p className="font-medium">총제작원가 {result.missing.length > 0 ? "원가 미등록" : won(result.supplyCost)}</p>
             {result.missing.length > 0 && <p className="text-red-700">빠진 항목: {result.missing.join(", ")}</p>}
+            {result.warnings.map((warning) => <p key={warning} className="text-amber-800">{warning}</p>)}
           </section>
           <section className="bg-white border border-slate-300 rounded-xl p-4 space-y-2">
             <h3 className="font-semibold text-slate-800">현재 고객 판매가</h3>
@@ -1132,7 +1150,7 @@ function QuotePanel({
           </section>
           <section className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
             <h3 className="font-semibold text-amber-950">내부 추천가격</h3>
-            <p className="text-xs text-amber-900">고객 화면 가격이 아닙니다. 총제작원가 ÷ (1 - 목표 이익률)로 계산하며, 고객 판매가를 자동으로 바꾸지 않습니다.</p>
+            <p className="text-xs text-amber-900">고객 화면 가격이 아닙니다. 총제작원가 ÷ (1 - 목표 이익률)로 계산하고, 추천 공급가는 10원 단위로 올립니다. 고객 판매가는 바꾸지 않습니다.</p>
             <p className="text-xs text-amber-900">{result.profitBasis === "total-cost" ? "고정 작업비가 포함되어 있어 총제작원가 기준 이익률입니다. 공헌이익률이 아닙니다." : "고정 작업비가 없어 이 이익률은 공헌이익률과 같습니다."}</p>
             {result.missing.length > 0 ? (
               <p>원가가 빠져 추천가격을 만들지 않습니다.</p>
@@ -1431,8 +1449,8 @@ const chargeMethods = [
 ];
 const usageOptions = [
   { value: "per-order", label: "주문마다 1번" },
-  { value: "per-piece", label: "한 개마다" },
-  { value: "per-meter-layout", label: "세로 길이만큼" },
+  { value: "per-piece", label: "개당 고정 사용량" },
+  { value: "per-meter-layout", label: "롤 배치로 길이 계산" },
   { value: "per-sheet-imposition", label: "시트 장수만큼" },
   { value: "per-m2", label: "면적만큼" },
 ];
