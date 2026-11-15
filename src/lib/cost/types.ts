@@ -66,6 +66,11 @@ export interface MaterialCost {
   price: CostAmount;
   /** 수량 구간 매입가. 있으면 그 구간의 사용단위 단가를 쓴다. */
   purchaseTiers?: QtyPriceBand[];
+  /**
+   * 판재 재료비. full은 필요한 장수 전체, share는 배치 개수 비율.
+   * 비우면 full이며 기존 스티커 계산과 같다.
+   */
+  sheetCharge?: "full" | "share";
   /** 0.05는 5%. */
   wasteRate?: number;
   wasteStatus: "confirmed" | "unconfirmed";
@@ -92,6 +97,8 @@ export interface ProcessDef {
   favorite?: boolean;
   updatedAt?: string;
   method: ChargeMethod;
+  /** 같은 장비의 준비비는 한 주문에 한 번만 계산한다. 비우면 공정마다 따로 계산한다. */
+  equipmentId?: string;
   variable?: CostAmount;
   laborPerMin?: CostAmount;
   equipmentPerMin?: CostAmount;
@@ -110,6 +117,8 @@ export interface EquipmentCost {
   id: string;
   label: string;
   price: CostAmount;
+  /** 이 장비를 쓰는 공정이 여러 개여도 주문당 한 번만 더한다. */
+  setup?: CostAmount;
   rollWidthMm?: number;
   history: CostChange[];
 }

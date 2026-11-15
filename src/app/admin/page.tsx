@@ -296,7 +296,7 @@ export default function AdminPage() {
       </p>
       <CostWorkspace tab={tab} onDraftState={onCostDraft} />
       <details className={`max-w-3xl mx-auto px-4 pb-10 ${tab === "products" ? "" : "hidden"}`}>
-        <summary className="cursor-pointer py-3 text-sm text-slate-700">기존 고객 8개 화면 가격. 이 가격은 원가로 옮기지 않습니다.</summary>
+        <summary className="cursor-pointer py-3 text-sm text-slate-700">기존 고객 8개 화면 가격. 새 견적으로 바꾸기 전까지 고객 화면용으로만 둡니다. 새 추천가와 맞추지 않습니다.</summary>
         <p className="text-xs text-slate-600 pb-2">
           {applied
             ? `적용 중: ${applied.source === "server" ? "서버 설정" : "코드 기본값"} · 버전 ${applied.revision}${

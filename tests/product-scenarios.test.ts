@@ -267,6 +267,162 @@ describe("판매 품목 시나리오", () => {
     expect(saved.recipes[0]?.lines[0]?.refId).toBe("board");
   });
 
+  it("A4 스티커 재료비 4,000원에 최소 작업비를 올리되 준비비와 더하지 않는다", () => {
+    const library: CostLibrary = {
+      ...emptyCostLibrary(),
+      materials: [
+        material({
+          id: "art",
+          label: "아트지",
+          purchaseUnit: "sheet",
+          usageUnit: "sheet",
+          price: money(1000, "krw-per-sheet"),
+          sheetWidthMm: 210,
+          sheetHeightMm: 297,
+        }),
+      ],
+      processes: [
+        process({ id: "cut", label: "시트 커팅", method: "per-sheet", variable: money(100, "krw-per-sheet"), minCharge: 2500 }),
+      ],
+      recipes: [
+        {
+          productId: "a4",
+          label: "A4 스티커",
+          active: true,
+          showOnCustomerQuote: false,
+          lines: [
+            line("paper", "art", "material", "per-sheet-imposition"),
+            line("cut", "cut", "process", "per-sheet-imposition"),
+          ],
+        },
+      ],
+      margins: [],
+    };
+    const result = simulatePricing(library, getFileConfig(), { productId: "a4", qty: 50, widthMm: 50, heightMm: 50, gapMm: 5 }, asOf);
+    expect(result.lines.find((row) => row.lineId === "paper")?.supplyCost).toBe(4000);
+    expect(result.lines.find((row) => row.lineId === "cut")?.supplyCost).toBe(2500);
+    expect(result.lines.find((row) => row.lineId === "cut")?.usageNote).toContain("최소 작업비");
+    expect(result.supplyCost).toBe(6500);
+    expect(result.target?.supplyPrice).toBe(10000);
+    expect(result.laborUnpriced).toBe(false);
+  });
+
+  it("아크릴 1개와 100개는 사용량 비례일 때 판재비가 달라지고 공정비는 장수 기준이다", () => {
+    const board = material({
+      id: "board",
+      label: "아크릴 판재",
+      purchaseUnit: "sheet",
+      usageUnit: "sheet",
+      price: money(10000, "krw-per-sheet"),
+      sheetWidthMm: 1000,
+      sheetHeightMm: 500,
+      sheetCharge: "share",
+    });
+    const library: CostLibrary = {
+      ...emptyCostLibrary(),
+      materials: [board],
+      processes: [process({ id: "laser", label: "레이저 가공", method: "per-sheet", variable: money(500, "krw-per-sheet") })],
+      recipes: [
+        {
+          productId: "keyring",
+          label: "UV 아크릴 키링",
+          active: true,
+          showOnCustomerQuote: false,
+          lines: [
+            line("board", "board", "material", "per-sheet-imposition"),
+            line("laser", "laser", "process", "per-sheet-imposition"),
+          ],
+        },
+      ],
+      margins: [],
+    };
+    const input = { productId: "keyring", widthMm: 50, heightMm: 30, gapMm: 5 };
+    const one = simulatePricing(library, getFileConfig(), { ...input, qty: 1 }, asOf);
+    const hundred = simulatePricing(library, getFileConfig(), { ...input, qty: 100 }, asOf);
+    expect(one.lines.find((row) => row.lineId === "board")?.usageNote).toContain("사용량 비례");
+    expect(one.lines.find((row) => row.lineId === "board")?.supplyCost).toBe(40);
+    expect(hundred.lines.find((row) => row.lineId === "board")?.supplyCost).toBe(3968);
+    expect(one.lines.find((row) => row.lineId === "laser")?.supplyCost).toBe(500);
+    expect(hundred.lines.find((row) => row.lineId === "laser")?.supplyCost).toBe(500);
+    const full: CostLibrary = { ...library, materials: [{ ...board, sheetCharge: "full" }] };
+    const oneFull = simulatePricing(full, getFileConfig(), { ...input, qty: 1 }, asOf);
+    expect(oneFull.lines.find((row) => row.lineId === "board")?.supplyCost).toBe(10000);
+    expect(oneFull.lines.find((row) => row.lineId === "board")?.usageNote).toContain("판재 전체 사용");
+  });
+
+  it("같은 장비 준비비는 한 주문에 한 번만 넣고 작업비가 없으면 추천가를 믿지 않는다", () => {
+    const library: CostLibrary = {
+      ...emptyCostLibrary(),
+      equipment: [
+        {
+          id: "dtf-machine",
+          label: "DTF 장비",
+          history: [],
+          price: money(0, "krw-per-order"),
+          setup: money(3000, "krw-per-order"),
+        },
+      ],
+      materials: [
+        material({ id: "shirt", label: "티셔츠", price: money(4000, "krw-per-ea") }),
+        material({
+          id: "film",
+          label: "DTF 필름",
+          purchaseUnit: "roll",
+          usageUnit: "m",
+          conversion: 100,
+          price: money(1500000, "krw-per-m"),
+          rollWidthMm: 600,
+          wasteRate: 0.15,
+        }),
+      ],
+      processes: [
+        process({ id: "print", label: "DTF 출력", method: "per-m", variable: money(800, "krw-per-m"), equipmentId: "dtf-machine" }),
+        process({
+          id: "press",
+          label: "열프레스",
+          method: "per-ea",
+          variable: money(150, "krw-per-ea"),
+          equipmentId: "dtf-machine",
+          setup: money(3000, "krw-per-order"),
+        }),
+      ],
+      recipes: [
+        {
+          productId: "dtf-shirt",
+          label: "DTF 티셔츠",
+          active: true,
+          showOnCustomerQuote: false,
+          lines: [
+            line("shirt", "shirt", "material", "per-piece"),
+            line("film", "film", "material", "per-meter-layout"),
+            line("print", "print", "process", "per-meter-layout"),
+            line("press", "press", "process", "per-piece"),
+          ],
+        },
+      ],
+      margins: [],
+    };
+    const one = simulatePricing(library, getFileConfig(), { productId: "dtf-shirt", qty: 1, widthMm: 100, heightMm: 100, gapMm: 7 }, asOf);
+    const hundred = simulatePricing(library, getFileConfig(), { productId: "dtf-shirt", qty: 100, widthMm: 100, heightMm: 100, gapMm: 7 }, asOf);
+    expect(one.lines.find((row) => row.lineId === "print")?.supplyCost).toBe(3080);
+    expect(one.lines.find((row) => row.lineId === "press")?.supplyCost).toBe(150);
+    expect(one.lines.find((row) => row.lineId === "press")?.usageNote).toContain("빼 두었습니다");
+    expect(one.supplyCost).toBe(8995);
+    expect(hundred.lines.find((row) => row.lineId === "print")?.supplyCost).toBe(4706);
+    expect(hundred.lines.find((row) => row.lineId === "press")?.supplyCost).toBe(15000);
+    expect(hundred.supplyCost).toBe(457347);
+    const bare: CostLibrary = {
+      ...library,
+      processes: [],
+      recipes: [{ ...library.recipes[0]!, lines: library.recipes[0]!.lines.filter((row) => row.kind === "material") }],
+    };
+    const materialOnly = simulatePricing(bare, getFileConfig(), { productId: "dtf-shirt", qty: 1, widthMm: 100, heightMm: 100, gapMm: 7 }, asOf);
+    expect(materialOnly.laborUnpriced).toBe(true);
+    expect(materialOnly.approvalAllowed).toBe(false);
+    expect(materialOnly.warnings.join(" ")).toContain("그대로 믿지");
+    expect(materialOnly.target?.supplyPrice).toBeGreaterThan(0);
+  });
+
   it("고객 POP 판매가는 새 원가 계산과 무관하게 유지된다", () => {
     const config = getFileConfig();
     expect(calcPop({ widthMm: 200, heightMm: 200, qty: 10 }, config.settings).supply4Cut).toBe(126900);

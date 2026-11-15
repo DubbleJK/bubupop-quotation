@@ -19,6 +19,7 @@ import type {
   CostAmount,
   CostLibrary,
   CostUnit,
+  EquipmentCost,
   MaterialCost,
   ProcessDef,
   ProductGroup,
@@ -68,8 +69,8 @@ function methodHint(method: string): string {
   if (method === "per-m") return "예: DTF 출력은 1m마다 800원. 필름비는 원자재에 적습니다.";
   if (method === "per-m2") return "예: 넓은 출력은 1제곱미터마다 금액을 적습니다.";
   if (method === "per-minute") return "예: 1분 인건비와 기계비, 걸리는 시간을 적습니다.";
-  if (method === "per-order") return "예: 디자인비는 주문 한 건에 8,000원.";
-  return "예: 열프레스는 기본 준비비에 개당 작업비를 더합니다.";
+  if (method === "per-order") return "예: 디자인비는 주문 한 건에 8,000원. 최소 작업비보다 크면 최소 작업비를 더하지 않습니다.";
+  return "예: 열프레스는 기본 준비비에 개당 작업비를 더합니다. 합계가 최소 작업비보다 작을 때만 최소 작업비로 맞춥니다.";
 }
 
 function usageHint(unit: string): string {
@@ -507,7 +508,13 @@ function MaterialFields({ row, update }: { row: MaterialCost; update: (patch: Pa
           <label className="flex flex-col gap-1 text-xs text-slate-500">두께 (mm)
             <input className={fieldClass} type="number" placeholder="기록용" value={row.thicknessMm ?? ""} onChange={(e) => update({ thicknessMm: optionalNumber(e.target.value) })} />
           </label>
-          <p className="sm:col-span-3 text-xs text-slate-500">비우면 시트 배치는 기존처럼 A4로 계산하고, 그 사실을 견적에 표시합니다. 아크릴 판재는 가로와 세로를 입력하세요.</p>
+          <label className="sm:col-span-3 flex flex-col gap-1 text-xs text-slate-500 max-w-xs">판재 재료비
+            <select className={fieldClass} value={row.sheetCharge ?? "full"} onChange={(e) => update({ sheetCharge: e.target.value === "share" ? "share" : "full" })}>
+              <option value="full">판재 전체 사용</option>
+              <option value="share">사용량 비례</option>
+            </select>
+          </label>
+          <p className="sm:col-span-3 text-xs text-slate-500">비우면 시트 배치는 기존처럼 A4로 계산하고, 그 사실을 견적에 표시합니다. 아크릴 판재는 가로와 세로를 입력하세요. 전체 사용은 필요한 장수만큼, 사용량 비례는 한 장에 들어가는 개수 중 주문 수량만큼만 재료비에 넣습니다. 비례는 남은 판재를 다시 쓸 수 있을 때의 방식이고 로스율은 그 수량에 한 번 적용됩니다. 출력·커팅 공정비는 어느 쪽이든 필요한 장수로 계산합니다.</p>
         </div>
       )}
       <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">버리는 비율 (%) (필수)
@@ -587,6 +594,7 @@ function ProcessesPanel({
           <option value="name">이름순</option>
         </select>
       </div>
+      <EquipmentSetup library={library} setLibrary={setLibrary} />
       <p className="text-xs text-slate-500">{view.total}개 중 {view.total === 0 ? 0 : view.start + 1}–{Math.min(view.start + CATALOG_PAGE_SIZE, view.total)}개</p>
       {view.rows.length === 0 && <p className="text-sm text-slate-500">찾는 공정이 없습니다.</p>}
       <ul className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
@@ -611,7 +619,11 @@ function ProcessesPanel({
       </div>
       {editing && (
         <EditorModal title={editing.label || "공정 수정"} onClose={() => setEditingId(null)}>
-          <ProcessFields row={editing} update={(patch) => update(editing.id, patch)} />
+          <ProcessFields
+            row={editing}
+            equipment={library.equipment}
+            update={(patch) => update(editing.id, patch)}
+          />
           {!used.has(editing.id) && (
             <button type="button" className="text-sm text-red-700" onClick={() => {
               const next = removeProcess(library, editing.id);
@@ -627,7 +639,81 @@ function ProcessesPanel({
   );
 }
 
-function ProcessFields({ row, update }: { row: ProcessDef; update: (patch: Partial<ProcessDef>) => void }) {
+function EquipmentSetup({
+  library,
+  setLibrary,
+}: {
+  library: CostLibrary;
+  setLibrary: (next: CostLibrary) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const update = (id: string, patch: Partial<EquipmentCost>) => {
+    setLibrary({
+      ...library,
+      equipment: library.equipment.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+    });
+  };
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+      <p className="text-sm font-medium text-slate-800">장비 준비비</p>
+      <p className="text-xs text-slate-500">같은 장비를 쓰는 공정이 한 주문에 여러 개여도 준비비는 한 번만 계산합니다. 공정 기본비 칸에 같은 금액을 또 적지 마세요.</p>
+      <div className="flex flex-wrap gap-2">
+        <input className={fieldClass} placeholder="예: UV 출력기" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <button
+          type="button"
+          className="text-sm border border-slate-300 rounded-lg px-3 py-1.5"
+          onClick={() => {
+            const name = label.trim();
+            if (!name) return;
+            const row: EquipmentCost = {
+              id: newCostId("equip"),
+              label: name,
+              history: [],
+              price: blankAmount("krw-per-order", seoulToday()),
+              setup: blankAmount("krw-per-order", seoulToday()),
+            };
+            setLibrary({ ...library, equipment: [...library.equipment, row] });
+            setLabel("");
+          }}
+        >
+          장비 추가
+        </button>
+      </div>
+      <ul className="space-y-2">
+        {library.equipment.map((row) => (
+          <li key={row.id} className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <input className={fieldClass} aria-label="장비 이름" value={row.label} onChange={(e) => update(row.id, { label: e.target.value })} />
+            <label className="flex flex-col gap-1 text-xs text-slate-500">준비비 (원)
+              <input
+                className={fieldClass}
+                type="number"
+                placeholder="없으면 비움"
+                value={row.setup?.amount ?? ""}
+                onChange={(e) => update(row.id, {
+                  setup: {
+                    ...(row.setup ?? blankAmount("krw-per-order", seoulToday())),
+                    amount: optionalNumber(e.target.value),
+                    status: e.target.value.trim() === "" ? "unconfirmed" : "confirmed",
+                  },
+                })}
+              />
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ProcessFields({
+  row,
+  equipment,
+  update,
+}: {
+  row: ProcessDef;
+  equipment: EquipmentCost[];
+  update: (patch: Partial<ProcessDef>) => void;
+}) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -643,6 +729,17 @@ function ProcessFields({ row, update }: { row: ProcessDef; update: (patch: Parti
       </div>
       <Select label="비용을 어떻게 매기나" value={row.method} options={chargeMethods} onChange={(method) => update({ method: method as ChargeMethod })} />
       <p className="text-xs text-slate-500">{methodHint(row.method)}</p>
+      <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">사용 장비
+        <select className={fieldClass} value={row.equipmentId ?? ""} onChange={(e) => update({ equipmentId: e.target.value || undefined })}>
+          <option value="">장비 없음. 이 공정 준비비만 계산</option>
+          {equipment.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        </select>
+      </label>
+      <p className="text-xs text-slate-500">재료비는 원자재에 적습니다. 이 화면의 금액은 준비비, 수량·시간 작업비, 최소 작업비입니다.</p>
+      <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">최소 작업비 (원)
+        <input className={fieldClass} type="number" placeholder="없으면 비움" value={row.minCharge ?? ""} onChange={(e) => update({ minCharge: optionalNumber(e.target.value) })} />
+      </label>
+      <p className="text-xs text-slate-500">준비비와 수량 작업비를 더한 뒤, 그 합이 최소 작업비보다 작을 때만 최소 작업비로 올립니다. 두 금액을 더해 청구하지 않습니다.</p>
       {row.method !== "per-order" && row.method !== "per-minute" && row.variable && (
         <AmountFields title="이 공정 가격" price={row.variable} onChange={(variable) => update({ variable })} />
       )}
@@ -663,9 +760,6 @@ function ProcessFields({ row, update }: { row: ProcessDef; update: (patch: Parti
       <details className="text-sm">
         <summary className="cursor-pointer text-slate-700">추가 설정</summary>
         <div className="space-y-3 mt-2">
-          <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">최소 작업비 (원)
-            <input className={fieldClass} type="number" placeholder="없으면 비움" value={row.minCharge ?? ""} onChange={(e) => update({ minCharge: optionalNumber(e.target.value) })} />
-          </label>
           <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">이 수량보다 많으면 확인
             <input className={fieldClass} type="number" placeholder="예: 500" value={row.reviewAboveQty ?? ""} onChange={(e) => update({ reviewAboveQty: optionalNumber(e.target.value) })} />
           </label>
@@ -1428,6 +1522,7 @@ function QuotePanel({
           <section className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
             <h3 className="font-semibold text-amber-950">내부 추천가격</h3>
             <p className="text-xs text-amber-900">고객 화면 가격이 아닙니다. 총제작원가 ÷ (1 - 목표 이익률)로 계산하고, 추천 공급가는 10원 단위로 올립니다. 고객 판매가는 바꾸지 않습니다.</p>
+            {result.laborUnpriced && <p className="text-red-800">작업비가 빠져 있어 이 추천 공급가는 그대로 믿지 않습니다.</p>}
             <p className="text-xs text-amber-900">{result.profitBasis === "total-cost" ? "고정 작업비가 포함되어 있어 총제작원가 기준 이익률입니다. 공헌이익률이 아닙니다." : "고정 작업비가 없어 이 이익률은 공헌이익률과 같습니다."}</p>
             {result.missing.length > 0 ? (
               <p>원가가 빠져 추천가격을 만들지 않습니다.</p>
