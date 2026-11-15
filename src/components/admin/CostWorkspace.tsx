@@ -14,6 +14,8 @@ import {
 import { clearBrowserDraft, parseCostLibraryDraft, readBrowserDraft, writeBrowserDraft } from "@/lib/cost/browserDraft";
 import { CATALOG_PAGE_SIZE, PROCESS_CATEGORIES, RECENT_KEY, catalogPage, linkCount, matchesQuery, pickSuggestions, rememberId, sortByNameOrRecent } from "@/lib/cost/catalog";
 import { DEFAULT_MINIMUM_RATE, DEFAULT_TARGET_RATE, simulatePricing, type PricingResult, type QtyCompareRow } from "@/lib/cost/pricing";
+import { buildPublicCatalog, customerQuoteBlockReason, isListedOnCustomerHome } from "@/lib/cost/publicCatalog";
+import { CustomerMenuList } from "@/components/CustomerMenuList";
 import type {
   ChargeMethod,
   CostAmount,
@@ -1061,7 +1063,7 @@ function ProductsPanel({
               ...library,
               recipes: [
                 ...library.recipes,
-                { productId, label, active: true, lines: [], showOnCustomerQuote: false },
+                { productId, label, active: true, lines: [], showOnCustomerQuote: false, customerVisible: false },
               ],
               margins: [
                 ...library.margins,
@@ -1116,7 +1118,7 @@ function ProductsPanel({
             <option key={row.productId} value={row.productId}>
               {row.favorite ? "★ " : ""}
               {row.label || row.productId}
-              {row.legacyQuoteId ? " · 고객 화면에 있음" : ""}
+              {row.legacyQuoteId ? (isListedOnCustomerHome(row) ? " · 고객 화면에 있음" : " · 첫 화면에서 숨김") : ""}
             </option>
           ))}
         </select>
@@ -1125,9 +1127,15 @@ function ProductsPanel({
         <article className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <p className="text-sm text-slate-600">
             {recipe.legacyQuoteId
-              ? "이 품목은 이미 고객 화면에 있습니다. 여기서 조립한 견적은 비교용이고, 고객 화면 가격은 그대로입니다."
-              : "새로 만든 품목은 고객 화면에 아직 나오지 않습니다."}
+              ? "이 품목은 기존 고객 견적입니다. 첫 화면에서 숨겨도 계산식과 판매단가는 지워지지 않습니다."
+              : "새로 만든 품목은 고객 견적 계산이 없어 첫 화면에 올리지 않습니다. 원가와 이익률도 고객에게 보이지 않습니다."}
           </p>
+          <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-md">고객에게 보일 이름
+            <input className={fieldClass} value={recipe.label} onChange={(e) => patchRecipe({ label: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-slate-500">설명 (선택)
+            <input className={fieldClass} placeholder="주문 조건 한 줄. 원가와 이익률은 적지 않습니다." value={recipe.description ?? ""} onChange={(e) => patchRecipe({ description: e.target.value })} />
+          </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <PercentField label="최소 확보 이익률 (%)" value={margin?.minimumRate ?? DEFAULT_MINIMUM_RATE} onChange={(minimumRate) => patchMargin({ minimumRate })} />
             <PercentField label="목표 이익률 (%)" value={margin?.targetRate ?? DEFAULT_TARGET_RATE} onChange={(targetRate) => patchMargin({ targetRate })} />
@@ -1223,15 +1231,27 @@ function ProductsPanel({
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
-              checked={recipe.showOnCustomerQuote}
-              disabled={!recipe.approvedSupplyPrice && recipe.fixedSupplyPrice == null}
-              onChange={(e) => patchRecipe({ showOnCustomerQuote: e.target.checked })}
+              checked={isListedOnCustomerHome(recipe)}
+              disabled={customerQuoteBlockReason(recipe) != null}
+              onChange={(e) => patchRecipe({ customerVisible: e.target.checked })}
             />
-            나중에 고객 화면에도 이 품목을 준비
+            고객 첫 화면에 표시
           </label>
-          <p className="text-xs text-slate-500">지금 고객 화면의 8개 품목 가격은 이 체크와 상관없이 유지됩니다. 수량별 견적은 4. 견적 작성에서 봅니다.</p>
+          {customerQuoteBlockReason(recipe) ? (
+            <p className="text-xs text-amber-800">{customerQuoteBlockReason(recipe)}</p>
+          ) : (
+            <p className="text-xs text-slate-500">숨기면 첫 화면과 견적 품목 목록에서 빠집니다. 주소로 들어온 기존 계산은 남고, 판매단가는 바뀌지 않습니다. 다른 기기는 원가를 저장한 뒤에 같아집니다.</p>
+          )}
+          {library.recipes.some((row) => row.productId !== recipe.productId && row.label.trim() !== "" && row.label.trim() === recipe.label.trim() && isListedOnCustomerHome(row) && isListedOnCustomerHome(recipe)) && (
+            <p className="text-xs text-amber-800">같은 이름의 품목이 고객 화면에 이미 있습니다. 둘 다 보이면 손님에게 같은 메뉴가 두 번 나옵니다.</p>
+          )}
         </article>
       )}
+      <section className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-800">고객 첫 화면 미리보기</h3>
+        <p className="text-xs text-slate-500">지금 화면의 공개 품목만 보여 줍니다. 다른 기기에는 서버에 저장한 뒤에 반영됩니다. 매입가와 이익률은 이 목록에 없습니다.</p>
+        <CustomerMenuList catalog={buildPublicCatalog(library)} />
+      </section>
     </section>
   );
 }

@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { configProvider, describeQuoteSource } from "@/lib/config";
 import type { AppConfig } from "@/lib/config";
+import { CustomerMenuList } from "@/components/CustomerMenuList";
+import { defaultPublicCatalog, type PublicCatalog } from "@/lib/cost/publicCatalog";
 import { PORTAL_URL } from "@/lib/portalUrl";
-
-const productBtnClass =
-  "flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-3 text-center text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]";
 
 /**
  * 첫 화면
@@ -22,6 +20,22 @@ export default function Home() {
   const [adminPin, setAdminPin] = useState("");
   const [adminError, setAdminError] = useState("");
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
+  const [catalog, setCatalog] = useState<PublicCatalog | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/catalog")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("catalog"))))
+      .then((data: { catalog?: PublicCatalog }) => {
+        if (!cancelled && data.catalog) setCatalog(data.catalog);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalog(defaultPublicCatalog());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,13 +98,7 @@ export default function Home() {
       <div className="w-full max-w-2xl space-y-5">
         <section className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-slate-700 mb-3">견적 품목 선택</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {config.products.map((p) => (
-              <Link key={p.id} href={`/quote?product=${encodeURIComponent(p.id)}`} className={productBtnClass}>
-                {p.label}
-              </Link>
-            ))}
-          </div>
+          {catalog ? <CustomerMenuList catalog={catalog} /> : <p className="text-sm text-slate-500">품목을 불러오는 중입니다.</p>}
         </section>
 
         <section className="bg-white border border-slate-200 rounded-xl p-4">
