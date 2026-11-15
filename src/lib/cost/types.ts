@@ -54,6 +54,14 @@ export interface MaterialCost {
   conversion?: number;
   /** 롤 배치에 쓰는 폭. 규격 글자와 별개이며, 비우면 배치 견적을 만들지 않는다. */
   rollWidthMm?: number;
+  /** 판재·시트 배치에 쓰는 가로. 규격 글자와 별개다. */
+  sheetWidthMm?: number;
+  /** 판재·시트 배치에 쓰는 세로. */
+  sheetHeightMm?: number;
+  /** 두께. 계산에는 쓰지 않고 기록만 한다. */
+  thicknessMm?: number;
+  /** 롤 길이. 배치 길이 계산에는 쓰지 않는다. */
+  rollLengthM?: number;
   conversionStatus: "confirmed" | "unconfirmed";
   price: CostAmount;
   /** 수량 구간 매입가. 있으면 그 구간의 사용단위 단가를 쓴다. */
@@ -113,13 +121,31 @@ export type RecipeUsage =
   | "per-sheet-imposition"
   | "per-m2";
 
+export interface RecipeOption {
+  id: string;
+  label: string;
+}
+
 export interface RecipeLine {
   lineId: string;
   refId: string;
   kind: "material" | "process";
   usage: RecipeUsage;
-  /** 같은 줄을 몇 번 적용하는지. 비우면 1. */
+  /** 같은 줄을 몇 번 적용하는지. 비우면 1. 양면처럼 두 배로 만들지 않는다. */
   times?: number;
+  /** 이 옵션을 견적에서 골랐을 때만 계산한다. 비우면 항상 계산한다. */
+  optionId?: string;
+  /** 판재·롤 배치에서 90도 회전을 비교한다. 비우면 허용이다. */
+  allowRotate?: boolean;
+  /** 격자 대신 관리자가 적은 한 장당 개수. 네스팅 결과가 아니다. */
+  manualPerSheet?: number;
+}
+
+export interface ProductGroup {
+  id: string;
+  label: string;
+  sortOrder: number;
+  active: boolean;
 }
 
 export type LegacyQuoteId =
@@ -146,6 +172,11 @@ export interface ProductRecipe {
   showOnCustomerQuote: boolean;
   /** 이 수량보다 많으면 생산·납기 확인 경고만 낸다. */
   reviewAboveQty?: number;
+  groupId?: string;
+  sortOrder?: number;
+  favorite?: boolean;
+  /** 견적에서 고르는 포장·인쇄·부가서비스. 고객 판매가를 바꾸지 않는다. */
+  options?: RecipeOption[];
 }
 
 export interface MarginPolicy {
@@ -166,6 +197,8 @@ export interface CostLibrary {
   equipment: EquipmentCost[];
   recipes: ProductRecipe[];
   margins: MarginPolicy[];
+  /** 비어 있거나 없으면 그룹 없는 기존 자료다. */
+  groups?: ProductGroup[];
 }
 
 export interface SimulationInput {
@@ -182,4 +215,6 @@ export interface SimulationInput {
   pcs?: number;
   indoorStandQty?: number;
   outdoorStandQty?: number;
+  /** 견적에서 고른 품목 옵션. 없는 줄은 항상 계산한다. */
+  optionIds?: string[];
 }

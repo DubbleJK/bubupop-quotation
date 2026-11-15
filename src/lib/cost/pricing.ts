@@ -1,5 +1,6 @@
 import { calcVatAndTotal, ceilToNearest10 } from "@/lib/calc/common";
 import { placeOnRoll } from "@/lib/calc/dtf";
+import { placeOnSheet } from "@/lib/calc/sheet";
 import type { AppConfig } from "@/lib/config/types";
 import type {
   ChargeMethod,
@@ -93,12 +94,17 @@ function lineStatus(used: CostStatus[]): CostStatus {
   return used.includes("code-reference") ? "code-reference" : "confirmed";
 }
 
-function measure(
-  usage: RecipeUsage,
-  input: SimulationInput,
-  trimMarginMm: number,
-  rollWidthMm?: number
-): { value: number; unitLabel: string; note?: string } | { missing: string } {
+function measure(args: {
+  usage: RecipeUsage;
+  input: SimulationInput;
+  trimMarginMm: number;
+  rollWidthMm?: number;
+  sheetWidthMm?: number;
+  sheetHeightMm?: number;
+  allowRotate: boolean;
+  manualPerSheet?: number;
+}): { value: number; unitLabel: string; note?: string } | { missing: string } {
+  const { usage, input } = args;
   const qty = input.qty;
   if (!finite(qty) || qty < 1) return { missing: "수량이 없습니다." };
   if (usage === "per-order") return { value: 1, unitLabel: "주문", note: "주문마다 한 번만 계산합니다." };
@@ -114,7 +120,7 @@ function measure(
     return { value: (width / 1000) * (height / 1000) * qty, unitLabel: "㎡", note: "가로·세로로 면적을 계산합니다." };
   }
   if (usage === "per-meter-layout") {
-    if (!finite(rollWidthMm) || rollWidthMm <= 0) {
+    if (!finite(args.rollWidthMm) || args.rollWidthMm <= 0) {
       return { missing: "롤 폭이 없어 배치 길이를 계산하지 않습니다. 롤 폭을 입력하거나 개당 고정 길이로 바꾸세요." };
     }
     if (!finite(width) || width <= 0 || !finite(height) || height <= 0) {
@@ -123,26 +129,49 @@ function measure(
     if (!finite(input.gapMm) || input.gapMm < 0) {
       return { missing: "배치 간격이 없어 필름 길이를 계산하지 않습니다." };
     }
-    const placed = placeOnRoll({ rollWidthMm, gapMm: input.gapMm, widthMm: width, heightMm: height, qty });
+    const placed = placeOnRoll({ rollWidthMm: args.rollWidthMm, gapMm: input.gapMm, widthMm: width, heightMm: height, qty });
     if (!placed.ok) return { missing: placed.error ?? "롤에 배치할 수 없습니다." };
     const turned = placed.rotated ? ", 돌려 배치" : "";
     return {
       value: placed.lengthM,
       unitLabel: "m",
-      note: `롤 폭 ${rollWidthMm}mm에 ${placed.itemsPerRow}개씩 ${placed.rows}줄${turned}. 로스는 이 길이에 한 번만 적용합니다.`,
+      note: `롤 폭 ${args.rollWidthMm}mm에 ${placed.itemsPerRow}개씩 ${placed.rows}줄${turned}. 로스는 이 길이에 한 번만 적용합니다.`,
+    };
+  }
+  if (finite(args.manualPerSheet) && args.manualPerSheet >= 1) {
+    const sheets = Math.ceil(qty / args.manualPerSheet);
+    return {
+      value: sheets,
+      unitLabel: "장",
+      note: `수동 배치로 한 장에 ${args.manualPerSheet}개, ${sheets}장입니다. 자동 네스팅 결과가 아닙니다.`,
     };
   }
   if (!finite(width) || !finite(height) || width <= 0 || height <= 0) {
     return { missing: "시트 매수를 계산할 가로·세로가 없습니다." };
   }
-  const sheetW = 210 - trimMarginMm * 2;
-  const sheetH = 297 - trimMarginMm * 2;
-  const gap = finite(input.gapMm) ? input.gapMm : 0;
-  const perA = Math.floor(sheetW / (width + gap)) * Math.floor(sheetH / (height + gap));
-  const perB = Math.floor(sheetW / (height + gap)) * Math.floor(sheetH / (width + gap));
-  const perSheet = Math.max(perA, perB);
-  if (perSheet < 1) return { missing: "이 크기는 A4 시트에 배치할 수 없습니다." };
-  return { value: Math.ceil(qty / perSheet), unitLabel: "장" };
+  const hasSheet = finite(args.sheetWidthMm) && finite(args.sheetHeightMm) && args.sheetWidthMm > 0 && args.sheetHeightMm > 0;
+  const sheetWidthMm = hasSheet ? args.sheetWidthMm! : 210;
+  const sheetHeightMm = hasSheet ? args.sheetHeightMm! : 297;
+  const placed = placeOnSheet({
+    sheetWidthMm,
+    sheetHeightMm,
+    trimMm: args.trimMarginMm,
+    gapMm: finite(input.gapMm) ? input.gapMm : 0,
+    itemWidthMm: width,
+    itemHeightMm: height,
+    qty,
+    allowRotate: args.allowRotate,
+  });
+  if (!placed.ok) return { missing: placed.error ?? "판재에 배치할 수 없습니다." };
+  const turned = placed.rotated ? ", 돌려 배치" : "";
+  const sourceNote = hasSheet
+    ? `판재 ${sheetWidthMm}×${sheetHeightMm}mm`
+    : "판재 규격이 없어 A4 210×297mm로 계산했습니다";
+  return {
+    value: placed.sheets,
+    unitLabel: "장",
+    note: `${sourceNote}. 한 장에 ${placed.perSheet}개, ${placed.sheets}장${turned}. 격자 배치이며 네스팅이 아닙니다.`,
+  };
 }
 
 function matchingBand(bands: { minQty: number; maxQty?: number; unitPrice: number }[] | undefined, qty: number): number | undefined {
@@ -345,7 +374,9 @@ export function simulatePricing(
     return base;
   }
 
+  const selectedOptions = new Set(input.optionIds ?? []);
   for (const line of recipe.lines) {
+    if (line.optionId && !selectedOptions.has(line.optionId)) continue;
     const materialForMeasure = line.kind === "material" ? library.materials.find((row) => row.id === line.refId) : undefined;
     const processForMeasure = line.kind === "process" ? library.processes.find((row) => row.id === line.refId) : undefined;
     const lineName = materialForMeasure?.label ?? processForMeasure?.label ?? line.refId;
@@ -353,7 +384,20 @@ export function simulatePricing(
       .filter((item) => item.kind === "material")
       .map((item) => library.materials.find((row) => row.id === item.refId)?.rollWidthMm)
       .find((width) => finite(width) && width > 0);
-    const measuredRaw = measure(line.usage, input, config.settings.trimMarginMm, materialForMeasure?.rollWidthMm ?? sharedRoll);
+    const sharedSheet = recipe.lines
+      .filter((item) => item.kind === "material")
+      .map((item) => library.materials.find((row) => row.id === item.refId))
+      .find((row) => finite(row?.sheetWidthMm) && finite(row?.sheetHeightMm));
+    const measuredRaw = measure({
+      usage: line.usage,
+      input,
+      trimMarginMm: config.settings.trimMarginMm,
+      rollWidthMm: materialForMeasure?.rollWidthMm ?? sharedRoll,
+      sheetWidthMm: materialForMeasure?.sheetWidthMm ?? sharedSheet?.sheetWidthMm,
+      sheetHeightMm: materialForMeasure?.sheetHeightMm ?? sharedSheet?.sheetHeightMm,
+      allowRotate: line.allowRotate !== false,
+      manualPerSheet: line.manualPerSheet,
+    });
     const times = finite(line.times) && line.times > 0 ? line.times : 1;
     const measured = "missing" in measuredRaw ? measuredRaw : { ...measuredRaw, value: measuredRaw.value * times };
     if ("missing" in measured) {
@@ -462,6 +506,11 @@ export function simulatePricing(
   });
   if (hasRollLayout && hasMeterProcess) {
     base.warnings.push("필름 배치 길이와 미터당 공정비가 함께 있습니다. 출력비가 두 번 들어가지 않았는지 확인하세요.");
+  }
+  const hasInk = recipe.lines.some((line) => line.kind === "material" && (library.materials.find((row) => row.id === line.refId)?.label ?? "").includes("잉크"));
+  const hasPrint = recipe.lines.some((line) => line.kind === "process" && (library.processes.find((row) => row.id === line.refId)?.label ?? "").includes("출력"));
+  if (hasInk && hasPrint) {
+    base.warnings.push("잉크를 원자재로 두었습니다. 출력 공정비에 잉크값을 다시 넣지 않았는지 확인하세요.");
   }
   const orderRefs = recipe.lines.filter((line) => line.usage === "per-order").map((line) => line.refId);
   if (orderRefs.some((refId, index) => orderRefs.indexOf(refId) !== index)) {

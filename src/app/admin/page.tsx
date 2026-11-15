@@ -25,12 +25,11 @@ interface SaveResult {
  * 로그인 세션은 서버 쿠키로 확인하고, 견적 설정은 서버 저장이 성공한 뒤에만 반영한다.
  */
 const ADMIN_TABS: { id: CostTab | "sale"; label: string }[] = [
-  { id: "sale", label: "지금 파는 가격" },
-  { id: "materials", label: "1. 원자재" },
-  { id: "processes", label: "2. 제작 공정" },
-  { id: "products", label: "3. 판매 품목" },
-  { id: "quote", label: "4. 견적 계산" },
-  { id: "history", label: "기록" },
+  { id: "materials", label: "1. 원자재 관리" },
+  { id: "processes", label: "2. 제작 공정 관리" },
+  { id: "products", label: "3. 판매 품목 관리" },
+  { id: "quote", label: "4. 견적 작성" },
+  { id: "history", label: "5. 견적 기록" },
 ];
 
 export default function AdminPage() {
@@ -38,7 +37,7 @@ export default function AdminPage() {
   const [editing, setEditing] = useState<AppConfig | null>(null);
   const [applied, setApplied] = useState<AppliedConfigInfo | null>(null);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
-  const [tab, setTab] = useState<CostTab | "sale">("sale");
+  const [tab, setTab] = useState<CostTab | "sale">("materials");
   const [costDraft, setCostDraft] = useState({ dirty: false, source: "" });
   const onCostDraft = useCallback((state: { dirty: boolean; source: string }) => setCostDraft(state), []);
   const [defaultSaved, setDefaultSaved] = useState(false);
@@ -243,7 +242,7 @@ export default function AdminPage() {
           ← 첫 화면
         </Link>
         <h1 className="text-xl font-semibold text-slate-800">관리자</h1>
-        <div className={`flex items-center gap-2 flex-wrap ${tab === "sale" ? "" : "hidden"}`}>
+        <div className="hidden">
           <button
             type="button"
             onClick={handleSaveAsDefault}
@@ -287,7 +286,7 @@ export default function AdminPage() {
           </button>
         ))}
       </nav>
-      <p className={`bg-white border-b border-slate-200 px-4 py-2 text-xs text-slate-600 ${tab === "sale" ? "" : "hidden"}`}>
+      <p className="hidden">
         {applied
           ? `적용 중: ${applied.source === "server" ? "서버 설정" : "코드 기본값"} · 버전 ${applied.revision}${
               applied.updatedAt ? ` · ${applied.updatedAt}` : ""
@@ -296,7 +295,24 @@ export default function AdminPage() {
         {saveResult ? ` · 마지막 저장: ${saveResult.text}` : ""}
       </p>
       <CostWorkspace tab={tab} onDraftState={onCostDraft} />
-      <main className={`max-w-3xl mx-auto p-4 md:p-6 space-y-8 ${tab === "sale" ? "" : "hidden"}`}>
+      <details className={`max-w-3xl mx-auto px-4 pb-10 ${tab === "products" ? "" : "hidden"}`}>
+        <summary className="cursor-pointer py-3 text-sm text-slate-700">기존 고객 8개 화면 가격. 이 가격은 원가로 옮기지 않습니다.</summary>
+        <p className="text-xs text-slate-600 pb-2">
+          {applied
+            ? `적용 중: ${applied.source === "server" ? "서버 설정" : "코드 기본값"} · 버전 ${applied.revision}${
+                applied.updatedAt ? ` · ${applied.updatedAt}` : ""
+              }`
+            : "설정을 불러오는 중입니다."}
+          {saveResult ? ` · 마지막 저장: ${saveResult.text}` : ""}
+        </p>
+        <div className="flex items-center gap-2 flex-wrap pb-3">
+          <button type="button" onClick={handleSaveAsDefault} className="text-sm text-slate-600 border border-slate-300 px-3 py-2 rounded-lg">
+            {defaultSaved ? "기본값 저장됨" : "현재 설정을 기본값으로 저장"}
+          </button>
+          <button type="button" onClick={handleResetToDefault} className="text-sm text-slate-500">기본값 복원</button>
+          <button type="button" onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">기존 고객 가격만 저장</button>
+        </div>
+      <main className="max-w-3xl mx-auto space-y-8">
         {/* 공통 */}
         <section className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-700 mb-3">공통</h2>
@@ -590,6 +606,7 @@ export default function AdminPage() {
           </div>
         </section>
       </main>
+      </details>
     </div>
   );
 }
