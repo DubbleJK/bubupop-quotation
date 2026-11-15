@@ -25,13 +25,11 @@ interface SaveResult {
  * 로그인 세션은 서버 쿠키로 확인하고, 견적 설정은 서버 저장이 성공한 뒤에만 반영한다.
  */
 const ADMIN_TABS: { id: CostTab | "sale"; label: string }[] = [
-  { id: "sale", label: "판매가격" },
-  { id: "materials", label: "원자재" },
-  { id: "processes", label: "제작 공정" },
-  { id: "products", label: "판매 품목" },
-  { id: "profit", label: "수익성" },
-  { id: "history", label: "견적 이력" },
-  { id: "deploy", label: "배포 점검" },
+  { id: "sale", label: "지금 파는 가격" },
+  { id: "materials", label: "1. 원자재" },
+  { id: "processes", label: "2. 추가 공정" },
+  { id: "products", label: "3. 품목 조립" },
+  { id: "history", label: "기록" },
 ];
 
 export default function AdminPage() {
