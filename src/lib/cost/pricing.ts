@@ -1,4 +1,5 @@
-import { calcVatAndTotal, roundToNearest10 } from "@/lib/calc/common";
+import { calcVatAndTotal, ceilToNearest10 } from "@/lib/calc/common";
+import { placeOnRoll } from "@/lib/calc/dtf";
 import type { AppConfig } from "@/lib/config/types";
 import type {
   ChargeMethod,
@@ -26,6 +27,8 @@ export interface CostLine {
   fixedCost?: number;
   status: CostStatus | "missing";
   reason?: string;
+  /** 가로·세로를 썼는지, 개당 고정인지를 관리자에게 보여 준다. */
+  usageNote?: string;
 }
 
 export interface PriceBand {
@@ -56,10 +59,20 @@ export interface PricingResult {
   deltaRate?: number;
   contribution?: number;
   contributionMargin?: number;
+  /** 고정비가 없으면 공헌이익률과 같고, 있으면 총제작원가 기준 이익률이다. */
+  profitBasis?: "contribution" | "total-cost";
+  currentProfit?: number;
+  currentMarginRate?: number;
   belowTarget: boolean;
+  belowMinimum: boolean;
   costLibraryRevision: number;
   marginEffectiveFrom?: string;
   vatRateUsed: number;
+  /** 변동원가 기준 추천가와 별도로, 수량이 생산 한도를 넘으면 안내만 한다. */
+  capacityWarning?: string;
+  usesVirtualCost: boolean;
+  /** 계산은 막지 않고, 이름 중복이나 비용 중복 가능성만 알린다. */
+  warnings: string[];
 }
 
 function finite(value: number | undefined): value is number {
@@ -83,24 +96,41 @@ function lineStatus(used: CostStatus[]): CostStatus {
 function measure(
   usage: RecipeUsage,
   input: SimulationInput,
-  trimMarginMm: number
-): { value: number; unitLabel: string } | { missing: string } {
+  trimMarginMm: number,
+  rollWidthMm?: number
+): { value: number; unitLabel: string; note?: string } | { missing: string } {
   const qty = input.qty;
   if (!finite(qty) || qty < 1) return { missing: "수량이 없습니다." };
-  if (usage === "per-order") return { value: 1, unitLabel: "주문" };
-  if (usage === "per-piece") return { value: qty, unitLabel: "개" };
+  if (usage === "per-order") return { value: 1, unitLabel: "주문", note: "주문마다 한 번만 계산합니다." };
+  if (usage === "per-piece") {
+    return { value: qty, unitLabel: "개", note: "개당 고정 사용량입니다. 가로·세로는 이 줄에 반영되지 않습니다." };
+  }
   const width = input.widthMm;
   const height = input.heightMm;
   if (usage === "per-m2") {
     if (!finite(width) || !finite(height) || width <= 0 || height <= 0) {
       return { missing: "면적을 계산할 가로·세로가 없습니다." };
     }
-    return { value: (width / 1000) * (height / 1000) * qty, unitLabel: "㎡" };
+    return { value: (width / 1000) * (height / 1000) * qty, unitLabel: "㎡", note: "가로·세로로 면적을 계산합니다." };
   }
   if (usage === "per-meter-layout") {
-    if (!finite(height) || height <= 0) return { missing: "배치 길이를 계산할 세로가 없습니다." };
-    const gap = finite(input.gapMm) ? input.gapMm : 0;
-    return { value: (qty * height + Math.max(0, qty - 1) * gap) / 1000, unitLabel: "m" };
+    if (!finite(rollWidthMm) || rollWidthMm <= 0) {
+      return { missing: "롤 폭이 없어 배치 길이를 계산하지 않습니다. 롤 폭을 입력하거나 개당 고정 길이로 바꾸세요." };
+    }
+    if (!finite(width) || width <= 0 || !finite(height) || height <= 0) {
+      return { missing: "배치하려면 가로와 세로가 필요합니다." };
+    }
+    if (!finite(input.gapMm) || input.gapMm < 0) {
+      return { missing: "배치 간격이 없어 필름 길이를 계산하지 않습니다." };
+    }
+    const placed = placeOnRoll({ rollWidthMm, gapMm: input.gapMm, widthMm: width, heightMm: height, qty });
+    if (!placed.ok) return { missing: placed.error ?? "롤에 배치할 수 없습니다." };
+    const turned = placed.rotated ? ", 돌려 배치" : "";
+    return {
+      value: placed.lengthM,
+      unitLabel: "m",
+      note: `롤 폭 ${rollWidthMm}mm에 ${placed.itemsPerRow}개씩 ${placed.rows}줄${turned}. 로스는 이 길이에 한 번만 적용합니다.`,
+    };
   }
   if (!finite(width) || !finite(height) || width <= 0 || height <= 0) {
     return { missing: "시트 매수를 계산할 가로·세로가 없습니다." };
@@ -115,32 +145,46 @@ function measure(
   return { value: Math.ceil(qty / perSheet), unitLabel: "장" };
 }
 
+function matchingBand(bands: { minQty: number; maxQty?: number; unitPrice: number }[] | undefined, qty: number): number | undefined {
+  if (!bands?.length || !finite(qty)) return undefined;
+  const found = bands.find((band) => qty >= band.minQty && (band.maxQty == null || qty <= band.maxQty) && finite(band.unitPrice));
+  return found?.unitPrice;
+}
+
 function materialCost(
   material: MaterialCost,
   needed: number,
   vatRate: number,
   asOf: string
 ): { supply?: number; gross?: number; status?: CostStatus; reason?: string } {
-  const exclusive = exclusiveAmount(material.price, vatRate, asOf);
-  if (exclusive === "missing") return { reason: "매입가가 미등록입니다." };
-  if (exclusive === "later") return { reason: "매입가 적용일 전입니다." };
-  const sameUnit = material.purchaseUnit === material.usageUnit;
-  let unitPrice = exclusive;
-  if (!sameUnit) {
-    if (material.conversionStatus !== "confirmed" || !finite(material.conversion) || material.conversion <= 0) {
-      return { reason: "단위 환산이 미등록입니다." };
+  const tier = matchingBand(material.purchaseTiers, needed);
+  let unitPrice: number;
+  let status: CostStatus = "confirmed";
+  let gross = material.price.amount;
+  if (tier != null) {
+    unitPrice = tier;
+    gross = tier;
+  } else {
+    const exclusive = exclusiveAmount(material.price, vatRate, asOf);
+    if (exclusive === "missing") return { reason: "매입가가 미등록입니다." };
+    if (exclusive === "later") return { reason: "매입가 적용일 전입니다." };
+    const sameUnit = material.purchaseUnit === material.usageUnit;
+    unitPrice = exclusive;
+    if (!sameUnit) {
+      if (material.conversionStatus !== "confirmed" || !finite(material.conversion) || material.conversion <= 0) {
+        return { reason: "단위 환산이 미등록입니다." };
+      }
+      unitPrice = exclusive / material.conversion;
     }
-    unitPrice = exclusive / material.conversion;
+    status = material.price.status === "code-reference" ? "code-reference" : "confirmed";
   }
   if (material.wasteStatus !== "confirmed" || !finite(material.wasteRate) || material.wasteRate < 0 || material.wasteRate >= 1) {
     return { reason: "로스율이 미등록입니다." };
   }
   const consumed = needed / (1 - material.wasteRate);
-  return {
-    supply: Math.round(consumed * unitPrice),
-    gross: material.price.amount,
-    status: material.price.status === "code-reference" ? "code-reference" : "confirmed",
-  };
+  const supply = Math.round(consumed * unitPrice);
+  if (!Number.isFinite(supply)) return { reason: "계산할 수 없는 금액입니다." };
+  return { supply, gross, status };
 }
 
 function moneyOf(result: ReturnType<typeof exclusiveAmount>, status: CostStatus | undefined): { amount?: number; status?: CostStatus; reason?: string } {
@@ -149,9 +193,23 @@ function moneyOf(result: ReturnType<typeof exclusiveAmount>, status: CostStatus 
   return { amount: result, status };
 }
 
+function applyMinCharge(
+  result: { supply?: number; variable?: number; fixed?: number; status?: CostStatus; reason?: string },
+  minCharge: number | undefined
+): { supply?: number; variable?: number; fixed?: number; status?: CostStatus; reason?: string } {
+  if (result.reason || result.supply == null || !finite(minCharge) || result.supply >= minCharge) return result;
+  const gap = Math.round(minCharge - result.supply);
+  return {
+    ...result,
+    supply: Math.round(minCharge),
+    fixed: Math.round((result.fixed ?? 0) + gap),
+  };
+}
+
 function processCost(
   process: ProcessDef,
   usageQty: number,
+  orderQty: number,
   vatRate: number,
   asOf: string
 ): { supply?: number; variable?: number; fixed?: number; status?: CostStatus; reason?: string } {
@@ -161,7 +219,10 @@ function processCost(
   if (method === "per-order") {
     const setup = take(process.setup);
     if (setup.reason || setup.amount == null || setup.status == null) return { reason: setup.reason ?? "세팅비가 미등록입니다." };
-    return { supply: Math.round(setup.amount), fixed: Math.round(setup.amount), variable: 0, status: setup.status };
+    return applyMinCharge(
+      { supply: Math.round(setup.amount), fixed: Math.round(setup.amount), variable: 0, status: setup.status },
+      process.minCharge
+    );
   }
 
   if (method === "per-minute") {
@@ -184,15 +245,19 @@ function processCost(
       used.push(setup.status);
     }
     const variable = (labor.amount + equipment.amount) * totalMinutes;
-    return {
-      supply: Math.round(variable + fixed),
-      variable: Math.round(variable),
-      fixed: Math.round(fixed),
-      status: lineStatus(used),
-    };
+    return applyMinCharge(
+      {
+        supply: Math.round(variable + fixed),
+        variable: Math.round(variable),
+        fixed: Math.round(fixed),
+        status: lineStatus(used),
+      },
+      process.minCharge
+    );
   }
 
-  const variablePrice = take(process.variable);
+  const band = matchingBand(process.quantityBands, orderQty);
+  const variablePrice = band != null ? { amount: band, status: "confirmed" as const } : take(process.variable);
   if (variablePrice.reason || variablePrice.amount == null || variablePrice.status == null) {
     return { reason: variablePrice.reason ?? "공정 단가가 미등록입니다." };
   }
@@ -200,27 +265,36 @@ function processCost(
     const setup = take(process.setup);
     if (setup.reason || setup.amount == null || setup.status == null) return { reason: setup.reason ?? "세팅비가 미등록입니다." };
     const variable = variablePrice.amount * usageQty;
-    return {
-      supply: Math.round(setup.amount + variable),
-      variable: Math.round(variable),
-      fixed: Math.round(setup.amount),
-      status: lineStatus([variablePrice.status, setup.status]),
-    };
+    return applyMinCharge(
+      {
+        supply: Math.round(setup.amount + variable),
+        variable: Math.round(variable),
+        fixed: Math.round(setup.amount),
+        status: lineStatus([variablePrice.status, setup.status]),
+      },
+      process.minCharge
+    );
   }
 
   const variable = variablePrice.amount * usageQty;
-  return {
-    supply: Math.round(variable),
-    variable: Math.round(variable),
-    fixed: 0,
-    status: variablePrice.status,
-  };
+  return applyMinCharge(
+    {
+      supply: Math.round(variable),
+      variable: Math.round(variable),
+      fixed: 0,
+      status: variablePrice.status,
+    },
+    process.minCharge
+  );
 }
+
+export const DEFAULT_MINIMUM_RATE = 0.2;
+export const DEFAULT_TARGET_RATE = 0.35;
 
 export function recommendSupply(supplyCost: number, rate: number | undefined, vatRate: number): PriceBand {
   if (!finite(rate)) return {};
   if (rate < 0 || rate >= 1) return { reason: "이익률은 100% 미만이어야 한다" };
-  const supplyPrice = roundToNearest10(supplyCost / (1 - rate));
+  const supplyPrice = ceilToNearest10(supplyCost / (1 - rate));
   const profit = supplyPrice - supplyCost;
   const vatAndTotal = calcVatAndTotal(supplyPrice, vatRate);
   return {
@@ -252,19 +326,39 @@ export function simulatePricing(
     referenceSimulation: false,
     approvalAllowed: false,
     belowTarget: false,
+    belowMinimum: false,
     costLibraryRevision: library.revision,
     vatRateUsed: vatRate,
+    usesVirtualCost: false,
+    warnings: [],
   };
+  if (!finite(input.qty) || input.qty < 1) {
+    base.missing.push("수량은 1 이상이어야 합니다.");
+    return base;
+  }
+  if ((finite(input.widthMm) && input.widthMm <= 0) || (finite(input.heightMm) && input.heightMm <= 0)) {
+    base.missing.push("가로·세로는 0보다 커야 합니다.");
+    return base;
+  }
   if (!recipe) {
     base.missing.push("레시피 없음");
     return base;
   }
 
   for (const line of recipe.lines) {
-    const measured = measure(line.usage, input, config.settings.trimMarginMm);
+    const materialForMeasure = line.kind === "material" ? library.materials.find((row) => row.id === line.refId) : undefined;
+    const processForMeasure = line.kind === "process" ? library.processes.find((row) => row.id === line.refId) : undefined;
+    const lineName = materialForMeasure?.label ?? processForMeasure?.label ?? line.refId;
+    const sharedRoll = recipe.lines
+      .filter((item) => item.kind === "material")
+      .map((item) => library.materials.find((row) => row.id === item.refId)?.rollWidthMm)
+      .find((width) => finite(width) && width > 0);
+    const measuredRaw = measure(line.usage, input, config.settings.trimMarginMm, materialForMeasure?.rollWidthMm ?? sharedRoll);
+    const times = finite(line.times) && line.times > 0 ? line.times : 1;
+    const measured = "missing" in measuredRaw ? measuredRaw : { ...measuredRaw, value: measuredRaw.value * times };
     if ("missing" in measured) {
-      base.lines.push({ lineId: line.lineId, name: line.refId, kind: line.kind, status: "missing", reason: measured.missing });
-      pushNamed(base.missing, line.refId, measured.missing);
+      base.lines.push({ lineId: line.lineId, name: lineName, kind: line.kind, status: "missing", reason: measured.missing });
+      pushNamed(base.missing, lineName, measured.missing);
       continue;
     }
     if (line.kind === "material") {
@@ -275,18 +369,25 @@ export function simulatePricing(
         continue;
       }
       const cost = materialCost(material, measured.value, vatRate, asOf);
+      const once = line.usage === "per-order";
+      const unitByMaterial = { m: "m", m2: "㎡", sheet: "장", ea: "개" } as const;
+      const fixedUnit = unitByMaterial[material.usageUnit];
+      if (material.price.note?.includes("가상") || material.price.status === "code-reference") base.usesVirtualCost = true;
       base.lines.push({
         lineId: line.lineId,
         name: material.label,
         kind: "material",
         usageQty: measured.value,
-        unitLabel: measured.unitLabel,
+        unitLabel: line.usage === "per-piece" ? fixedUnit : measured.unitLabel,
         grossAmount: cost.gross,
         supplyCost: cost.supply,
-        variableCost: cost.supply,
-        fixedCost: 0,
+        variableCost: once ? 0 : cost.supply,
+        fixedCost: once ? cost.supply : 0,
         status: cost.reason ? "missing" : cost.status ?? "missing",
         reason: cost.reason,
+        usageNote: line.usage === "per-piece"
+          ? `개당 고정 ${times}${fixedUnit}입니다. 가로·세로는 이 줄에 반영되지 않습니다.`
+          : measured.note,
       });
       if (cost.reason) pushNamed(base.missing, material.label, cost.reason);
       else if (cost.status === "code-reference") base.references.push(material.label);
@@ -299,7 +400,7 @@ export function simulatePricing(
       pushNamed(base.missing, line.refId, "공정이 없습니다.");
       continue;
     }
-    const cost = processCost(process, measured.value, vatRate, asOf);
+    const cost = processCost(process, measured.value, input.qty, vatRate, asOf);
     base.lines.push({
       lineId: line.lineId,
       name: process.label,
@@ -311,6 +412,7 @@ export function simulatePricing(
       fixedCost: cost.fixed,
       status: cost.reason ? "missing" : cost.status ?? "missing",
       reason: cost.reason,
+      usageNote: measured.note,
     });
     if (cost.reason) pushNamed(base.missing, process.label, cost.reason);
     else if (cost.status === "code-reference") base.references.push(process.label);
@@ -324,12 +426,18 @@ export function simulatePricing(
     base.variableCost = variableCost;
     base.fixedCost = fixedCost;
     const margin = library.margins.find((row) => row.productId === recipe.productId);
-    if (margin && margin.effectiveFrom <= asOf) {
-      base.marginEffectiveFrom = margin.effectiveFrom;
-      base.minimum = recommendSupply(supplyCost, margin.minimumRate, vatRate);
-      base.target = recommendSupply(supplyCost, margin.targetRate, vatRate);
-      base.high = recommendSupply(supplyCost, margin.highRate, vatRate);
+    const scheduledLater = margin != null && margin.effectiveFrom > asOf;
+    if (!scheduledLater) {
+      const minimumRate = margin?.minimumRate ?? DEFAULT_MINIMUM_RATE;
+      const targetRate = margin?.targetRate ?? DEFAULT_TARGET_RATE;
+      base.marginEffectiveFrom = margin?.effectiveFrom;
+      base.profitBasis = fixedCost > 0 ? "total-cost" : "contribution";
+      base.minimum = recommendSupply(supplyCost, minimumRate, vatRate);
+      base.target = recommendSupply(supplyCost, targetRate, vatRate);
     }
+    const limits = [recipe.reviewAboveQty, ...recipe.lines.map((line) => library.processes.find((row) => row.id === line.refId)?.reviewAboveQty)];
+    const limit = limits.filter((value): value is number => finite(value) && value > 0).sort((a, b) => a - b)[0];
+    if (limit != null && input.qty > limit) base.capacityWarning = "관리자 확인 필요";
     const floor = recipe.legacyQuoteId === "sticker-sheet" ? config.settings.minStickerSupply : undefined;
     const fromMargin = base.minimum?.supplyPrice;
     if (finite(fromMargin) || finite(floor)) {
@@ -339,6 +447,27 @@ export function simulatePricing(
     base.approvalAllowed = !base.referenceSimulation && finite(base.target?.supplyPrice);
   }
 
+  const sameProcess = library.processes.find((process) =>
+    process.label.trim() !== ""
+    && process.label.trim() === recipe.label.trim()
+    && recipe.lines.some((line) => line.kind === "process" && line.refId === process.id)
+  );
+  if (sameProcess) {
+    base.warnings.push(`품목 이름과 공정 이름 '${recipe.label}'이 같습니다. 판매 품목은 에코백 DTF 인쇄처럼 적고, 열프레스는 공정으로 두세요.`);
+  }
+  const hasRollLayout = recipe.lines.some((line) => line.kind === "material" && line.usage === "per-meter-layout");
+  const hasMeterProcess = recipe.lines.some((line) => {
+    if (line.kind !== "process") return false;
+    return library.processes.find((process) => process.id === line.refId)?.method === "per-m";
+  });
+  if (hasRollLayout && hasMeterProcess) {
+    base.warnings.push("필름 배치 길이와 미터당 공정비가 함께 있습니다. 출력비가 두 번 들어가지 않았는지 확인하세요.");
+  }
+  const orderRefs = recipe.lines.filter((line) => line.usage === "per-order").map((line) => line.refId);
+  if (orderRefs.some((refId, index) => orderRefs.indexOf(refId) !== index)) {
+    base.warnings.push("같은 공정의 주문당 고정비가 두 번 들어 있습니다.");
+  }
+
   const current = currentLegacySale(config, recipe, input);
   if (current) {
     base.current = current;
@@ -346,6 +475,12 @@ export function simulatePricing(
       base.deltaSupply = base.target.supplyPrice - current.supplyPrice;
       base.deltaRate = current.supplyPrice === 0 ? undefined : base.deltaSupply / current.supplyPrice;
       base.belowTarget = current.supplyPrice < base.target.supplyPrice;
+    }
+    if (finite(current.supplyPrice) && finite(base.supplyCost)) {
+      base.currentProfit = current.supplyPrice - base.supplyCost;
+      base.currentMarginRate = current.supplyPrice === 0 ? undefined : base.currentProfit / current.supplyPrice;
+      const minimumRate = library.margins.find((row) => row.productId === recipe.productId)?.minimumRate ?? DEFAULT_MINIMUM_RATE;
+      base.belowMinimum = finite(base.currentMarginRate) && base.currentMarginRate < minimumRate;
     }
     if (finite(current.supplyPrice) && finite(base.variableCost)) {
       base.contribution = current.supplyPrice - base.variableCost;
@@ -375,4 +510,51 @@ export function approveRecordedPrice(
 
 export function marginOf(library: CostLibrary, productId: string): MarginPolicy | undefined {
   return library.margins.find((row) => row.productId === productId);
+}
+
+export interface QtyCompareRow {
+  qty: number;
+  supplyCost?: number;
+  recommendedSupply?: number;
+  unitSupply?: number;
+  marginRate?: number;
+  status: "ok" | "missing" | "inversion" | "review" | "low-margin";
+  note?: string;
+}
+
+/** 같은 품목·규격에서 수량만 바꿔 비교한다. 역전이 있어도 판매가는 바꾸지 않는다. */
+export function compareQuantities(
+  library: CostLibrary,
+  config: AppConfig,
+  input: SimulationInput,
+  qtys: number[],
+  asOf: string
+): QtyCompareRow[] {
+  const ordered = [...qtys].filter((qty) => finite(qty) && qty >= 1).sort((a, b) => a - b);
+  const rows: QtyCompareRow[] = ordered.map((qty) => {
+    const result = simulatePricing(library, config, { ...input, qty }, asOf);
+    const recommended = result.target?.supplyPrice;
+    const status: QtyCompareRow["status"] = result.missing.length > 0 ? "missing" : result.capacityWarning ? "review" : result.belowMinimum ? "low-margin" : "ok";
+    return {
+      qty,
+      supplyCost: result.supplyCost,
+      recommendedSupply: recommended,
+      unitSupply: finite(recommended) ? Math.round(recommended / qty) : undefined,
+      marginRate: result.target?.marginRate,
+      status,
+      note: result.missing[0] ?? result.capacityWarning ?? (result.belowMinimum ? "현재 판매가의 이익률이 최소 확보 이익률보다 낮습니다. 고객 판매가는 바꾸지 않았습니다." : undefined),
+    };
+  });
+  for (let index = 1; index < rows.length; index += 1) {
+    const previous = rows[index - 1]?.recommendedSupply;
+    const current = rows[index]?.recommendedSupply;
+    if (finite(previous) && finite(current) && current < previous) {
+      rows[index] = {
+        ...rows[index],
+        status: "inversion",
+        note: "수량이 늘었는데 추천 총액이 줄어듭니다. 고객 판매가는 바꾸지 않았습니다.",
+      };
+    }
+  }
+  return rows;
 }

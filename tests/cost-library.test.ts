@@ -5,7 +5,7 @@ import { calculateQuote } from "@/lib/calc/uvAcrylicKeyring";
 import { getFileConfig } from "@/lib/config/fileConfig";
 import { toPublicConfig } from "@/lib/config/publicConfig";
 import { emptyCostLibrary, removeMaterial, removeProcess } from "@/lib/cost/library";
-import { approveRecordedPrice, recommendSupply, simulatePricing } from "@/lib/cost/pricing";
+import { DEFAULT_TARGET_RATE, approveRecordedPrice, recommendSupply, simulatePricing } from "@/lib/cost/pricing";
 import { scanDisplayedDrops } from "@/lib/cost/legacySale";
 import type { CostLibrary, MaterialCost, ProcessDef, RecipeLine } from "@/lib/cost/types";
 import { COST_LIBRARY_KEY } from "@/server/kvCostLibrary";
@@ -67,21 +67,29 @@ function libraryWith(
 }
 
 describe("원가 라이브러리", () => {
-  it("목표 이익률 25%는 가산율 25%와 다른 13,330원이다", () => {
+  it("목표 이익률 25%는 가산율 25%와 다르고 10원 단위로 올린 13,340원이다", () => {
     const band = recommendSupply(10000, 0.25, 0.1);
-    expect(band.supplyPrice).toBe(13330);
+    expect(band.supplyPrice).toBe(13340);
     expect(band.supplyPrice).not.toBe(12500);
-    expect(band.profit).toBe(3330);
+    expect(band.supplyPrice).not.toBe(13330);
+    expect(band.profit).toBe(3340);
+  });
+
+  it("191,471원의 35% 추천 공급가는 294,580원이고 20%는 239,340원이다", () => {
+    expect(recommendSupply(191471, 0.35, 0.1).supplyPrice).toBe(294580);
+    expect(recommendSupply(191471, 0.2, 0.1).supplyPrice).toBe(239340);
+    expect(recommendSupply(2500, 0, 0.1).supplyPrice).toBe(2500);
   });
 
   it("롤 환산과 로스 5%의 공급원가는 5,263원이다", () => {
     const config = getFileConfig();
     const result = simulatePricing(
-      libraryWith([material()]),
+      libraryWith([material()], [], [{ lineId: "line-film", refId: "film", kind: "material", usage: "per-piece", times: 2.5 }]),
       config,
       { productId: "pop", qty: 1, widthMm: 100, heightMm: 2500 },
       asOf
     );
+    expect(result.lines[0]?.usageNote).toContain("가로·세로");
     expect(result.lines[0]?.supplyCost).toBe(5263);
     expect(result.target?.supplyPrice).toBe(recommendSupply(5263, 0.25, 0.1).supplyPrice);
   });
@@ -90,7 +98,7 @@ describe("원가 라이브러리", () => {
     const config = getFileConfig();
     const missingWaste = material({ wasteRate: undefined, wasteStatus: "unconfirmed" });
     const result = simulatePricing(
-      libraryWith([missingWaste]),
+      libraryWith([missingWaste], [], [{ lineId: "line-film", refId: "film", kind: "material", usage: "per-piece" }]),
       config,
       { productId: "pop", qty: 1, widthMm: 100, heightMm: 2500 },
       asOf
@@ -172,7 +180,7 @@ describe("원가 라이브러리", () => {
     const library = libraryWith(
       [expensive],
       [],
-      [{ lineId: "once", refId: "film", kind: "material", usage: "per-order" }]
+      [{ lineId: "once", refId: "film", kind: "material", usage: "per-piece" }]
     );
     const result = simulatePricing(library, config, { productId: "pop", qty: 10, widthMm: 200, heightMm: 200 }, asOf);
     expect(result.belowTarget).toBe(true);
@@ -218,5 +226,37 @@ describe("원가 라이브러리", () => {
     expect(drops.some((row) => row.qty === 2 && row.price === 4562 && row.previous === 7260)).toBe(true);
     expect(calculateQuote({ width: 45, height: 30, qty: 1 }).finalPrice).toBe(7260);
     expect(calculateQuote({ width: 45, height: 30, qty: 2 }).finalPrice).toBe(4562);
+  });
+
+  it("추천가는 총제작원가를 목표 이익률로 나누고 고정비가 있으면 공헌이익률이 아니다", () => {
+    const config = getFileConfig();
+    const library = emptyCostLibrary();
+    const pop = library.recipes.find((row) => row.productId === "pop");
+    if (!pop) throw new Error("pop");
+    pop.lines = [{ lineId: "press", refId: "press", kind: "process", usage: "per-piece" }];
+    library.processes = [
+      {
+        id: "press",
+        label: "열프레스",
+        active: true,
+        method: "setup-plus-qty",
+        history: [],
+        setup: { amount: 1000, unit: "krw-per-order", tax: "exclusive", status: "confirmed", effectiveFrom: "2026-01-01" },
+        variable: { amount: 1000, unit: "krw-per-ea", tax: "exclusive", status: "confirmed", effectiveFrom: "2026-01-01" },
+      },
+    ];
+    const result = simulatePricing(library, config, { productId: "pop", qty: 1, widthMm: 100, heightMm: 100 }, asOf);
+    expect(result.supplyCost).toBe(2000);
+    expect(result.profitBasis).toBe("total-cost");
+    expect(result.target?.supplyPrice).toBe(recommendSupply(2000, DEFAULT_TARGET_RATE, 0.1).supplyPrice);
+    expect(result.target?.supplyPrice).not.toBe(recommendSupply(1000, DEFAULT_TARGET_RATE, 0.1).supplyPrice);
+    expect(result.current?.supplyPrice).toBe(calcPop({ widthMm: 100, heightMm: 100, qty: 1 }, config.settings).supply4Cut);
+  });
+
+  it("원가가 비어 있으면 0원 추천가를 만들지 않는다", () => {
+    const library = emptyCostLibrary();
+    const result = simulatePricing(library, getFileConfig(), { productId: "없는품목", qty: 1 }, asOf);
+    expect(result.target?.supplyPrice).toBeUndefined();
+    expect(result.supplyCost).toBeUndefined();
   });
 });

@@ -11,6 +11,8 @@ import type {
 
 export const COST_LIBRARY_KEY = "quotation_cost_library";
 export const QUOTE_LOG_KEY = "quotation_quote_log";
+/** 이보다 오래된 견적 기록은 저장할 때 잘린다. */
+export const QUOTE_LOG_LIMIT = 200;
 
 const LEGACY: Array<[ProductRecipe["productId"], string, NonNullable<ProductRecipe["legacyQuoteId"]>]> = [
   ["pop", "POP", "pop"],
@@ -200,6 +202,28 @@ export function assertLibraryKeepsUsedRows(
     }
   }
   return null;
+}
+
+/** 품목을 복제한다. 고객 화면 연결과 승인 가격은 따라가지 않는다. */
+export function duplicateRecipe(library: CostLibrary, productId: string): CostLibrary | null {
+  const source = library.recipes.find((row) => row.productId === productId);
+  if (!source) return null;
+  const product = newCostId("item");
+  const copy: ProductRecipe = {
+    ...source,
+    productId: product,
+    label: `${source.label} 복사`,
+    legacyQuoteId: undefined,
+    showOnCustomerQuote: false,
+    approvedSupplyPrice: undefined,
+    lines: source.lines.map((line) => ({ ...line, lineId: newCostId("line") })),
+  };
+  const margin = library.margins.find((row) => row.productId === productId);
+  return {
+    ...library,
+    recipes: [...library.recipes, copy],
+    margins: margin ? [...library.margins, { ...margin, productId: product, revision: 0, history: [] }] : library.margins,
+  };
 }
 
 export function upsertMargin(library: CostLibrary, productId: string, today: string): MarginPolicy {

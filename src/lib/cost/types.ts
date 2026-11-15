@@ -32,21 +32,37 @@ export interface CostChange {
 export type PurchaseUnit = "roll" | "box" | "m" | "m2" | "sheet" | "ea";
 export type UsageUnit = "m" | "m2" | "sheet" | "ea";
 
+/** 사용 단위 수량 구간의 개당 매입가. 고객 판매 할인과 별개다. */
+export interface QtyPriceBand {
+  minQty: number;
+  /** 비우면 상한이 없다. */
+  maxQty?: number;
+  unitPrice: number;
+}
+
 export interface MaterialCost {
   id: string;
   label: string;
   kind: string;
   spec: string;
+  /** 공급처. 비워도 된다. */
+  supplier?: string;
   active: boolean;
   purchaseUnit: PurchaseUnit;
   usageUnit: UsageUnit;
   /** 구매단위 1개에 들어 있는 사용단위 수량. 단위가 같으면 1. */
   conversion?: number;
+  /** 롤 배치에 쓰는 폭. 규격 글자와 별개이며, 비우면 배치 견적을 만들지 않는다. */
+  rollWidthMm?: number;
   conversionStatus: "confirmed" | "unconfirmed";
   price: CostAmount;
+  /** 수량 구간 매입가. 있으면 그 구간의 사용단위 단가를 쓴다. */
+  purchaseTiers?: QtyPriceBand[];
   /** 0.05는 5%. */
   wasteRate?: number;
   wasteStatus: "confirmed" | "unconfirmed";
+  favorite?: boolean;
+  updatedAt?: string;
   history: CostChange[];
 }
 
@@ -62,13 +78,23 @@ export type ChargeMethod =
 export interface ProcessDef {
   id: string;
   label: string;
+  /** 인쇄, 전사, 커팅, 후가공, 디자인, 포장. 비어 있으면 미분류. */
+  category?: string;
   active: boolean;
+  favorite?: boolean;
+  updatedAt?: string;
   method: ChargeMethod;
   variable?: CostAmount;
   laborPerMin?: CostAmount;
   equipmentPerMin?: CostAmount;
   minutes?: { value?: number; per: "ea" | "m" | "order"; status: CostStatus };
   setup?: CostAmount;
+  /** 주문 수량 구간에 따라 바뀌는 단가. 판매 할인이 아니다. */
+  quantityBands?: QtyPriceBand[];
+  /** 이 공정의 최소 작업비. 계산액이 더 작으면 이 금액까지 올린다. */
+  minCharge?: number;
+  /** 이 수량보다 많은 주문은 관리자 확인. */
+  reviewAboveQty?: number;
   history: CostChange[];
 }
 
@@ -92,6 +118,8 @@ export interface RecipeLine {
   refId: string;
   kind: "material" | "process";
   usage: RecipeUsage;
+  /** 같은 줄을 몇 번 적용하는지. 비우면 1. */
+  times?: number;
 }
 
 export type LegacyQuoteId =
@@ -116,6 +144,8 @@ export interface ProductRecipe {
   approvedSupplyPrice?: number;
   /** 새 품목을 고객 목록에 올릴 준비. 기존 8개 견적 분기는 이 값과 무관하다. */
   showOnCustomerQuote: boolean;
+  /** 이 수량보다 많으면 생산·납기 확인 경고만 낸다. */
+  reviewAboveQty?: number;
 }
 
 export interface MarginPolicy {
