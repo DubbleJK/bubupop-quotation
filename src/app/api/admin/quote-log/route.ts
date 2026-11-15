@@ -7,8 +7,14 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
   const stored = await readQuoteLog();
   if (stored.state === "error") return NextResponse.json({ error: "log_unreadable" }, { status: 503 });
-  if (stored.state === "ok") return NextResponse.json({ entries: stored.entries });
-  return NextResponse.json({ entries: [], source: stored.state });
+  if (stored.state === "ok") {
+    return NextResponse.json({ entries: stored.entries, source: stored.where === "dev-file" ? "dev-file" : "server", limit: 200 });
+  }
+  return NextResponse.json({
+    entries: [],
+    source: stored.state === "unconfigured" ? "unconfigured" : stored.where === "dev-file" ? "dev-file" : "empty",
+    limit: 200,
+  });
 }
 
 export async function POST(request: NextRequest) {

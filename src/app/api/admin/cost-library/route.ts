@@ -12,11 +12,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "cost_unreadable" }, { status: 503 });
   }
   if (stored.state === "ok") {
-    return NextResponse.json({ library: stored.library, source: "server" });
+    return NextResponse.json({ library: stored.library, source: stored.where === "dev-file" ? "dev-file" : "server" });
+  }
+  if (stored.state === "unconfigured") {
+    return NextResponse.json({ library: emptyCostLibrary(), source: "unconfigured" });
   }
   return NextResponse.json({
     library: emptyCostLibrary(),
-    source: stored.state === "unconfigured" ? "unconfigured" : "empty",
+    source: stored.where === "dev-file" ? "dev-empty" : "empty",
   });
 }
 
@@ -38,5 +41,7 @@ export async function PUT(request: NextRequest) {
     const status = written.reason === "in_use" ? 409 : 503;
     return NextResponse.json({ error: written.reason }, { status });
   }
-  return NextResponse.json({ ok: true, library: written.library });
+  const stored = await readCostLibrary();
+  const source = stored.state === "ok" || stored.state === "empty" ? (stored.where === "dev-file" ? "dev-file" : "server") : "server";
+  return NextResponse.json({ ok: true, library: written.library, source });
 }

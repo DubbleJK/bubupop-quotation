@@ -4,7 +4,7 @@ import { readConfigMeta } from "@/lib/config/configMeta";
 import type { AppConfig } from "@/lib/config/types";
 import { seoulToday } from "@/lib/cost/library";
 import { scanDisplayedDrops } from "@/lib/cost/legacySale";
-import { simulatePricing } from "@/lib/cost/pricing";
+import { compareQuantities, simulatePricing } from "@/lib/cost/pricing";
 import type { CostLibrary, SimulationInput } from "@/lib/cost/types";
 import { readKvConfig } from "@/server/kvConfig";
 import { readCostLibrary } from "@/server/kvCostLibrary";
@@ -21,10 +21,12 @@ export async function POST(request: NextRequest) {
   if (denied) return denied;
   let input: SimulationInput | undefined;
   let libraryFromClient: CostLibrary | undefined;
+  let qtys: number[] = [1, 10, 50, 100, 500];
   try {
-    const body = (await request.json()) as { input?: SimulationInput; library?: CostLibrary };
+    const body = (await request.json()) as { input?: SimulationInput; library?: CostLibrary; qtys?: number[] };
     input = body.input;
     if (isLibrary(body.library)) libraryFromClient = body.library;
+    if (Array.isArray(body.qtys) && body.qtys.every((qty) => Number.isFinite(qty))) qtys = body.qtys;
   } catch {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
@@ -46,10 +48,12 @@ export async function POST(request: NextRequest) {
   const storedSale = await readKvConfig();
   const config: AppConfig = storedSale.state === "ok" ? storedSale.config : getFileConfig();
   const result = simulatePricing(library, config, input, seoulToday());
+  const comparison = compareQuantities(library, config, input, qtys, seoulToday());
   const recipe = library.recipes.find((row) => row.productId === input.productId);
   const sale = readConfigMeta(config);
   return NextResponse.json({
     result,
+    comparison,
     salePolicyRevision: sale.revision,
     quantityDrops: recipe ? scanDisplayedDrops(config, recipe).slice(0, 8) : [],
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { configProvider } from "@/lib/config";
@@ -27,8 +27,9 @@ interface SaveResult {
 const ADMIN_TABS: { id: CostTab | "sale"; label: string }[] = [
   { id: "sale", label: "지금 파는 가격" },
   { id: "materials", label: "1. 원자재" },
-  { id: "processes", label: "2. 추가 공정" },
-  { id: "products", label: "3. 품목 조립" },
+  { id: "processes", label: "2. 제작 공정" },
+  { id: "products", label: "3. 판매 품목" },
+  { id: "quote", label: "4. 견적 계산" },
   { id: "history", label: "기록" },
 ];
 
@@ -38,6 +39,8 @@ export default function AdminPage() {
   const [applied, setApplied] = useState<AppliedConfigInfo | null>(null);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
   const [tab, setTab] = useState<CostTab | "sale">("sale");
+  const [costDraft, setCostDraft] = useState({ dirty: false, source: "" });
+  const onCostDraft = useCallback((state: { dirty: boolean; source: string }) => setCostDraft(state), []);
   const [defaultSaved, setDefaultSaved] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -228,7 +231,15 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="text-slate-600 hover:text-slate-800 text-sm">
+        <Link
+          href="/"
+          className="text-slate-600 hover:text-slate-800 text-sm"
+          onClick={(event) => {
+            if (!costDraft.dirty) return;
+            const leave = window.confirm("서버에 저장하지 않은 원가가 있습니다. 첫 화면으로 이동할까요?");
+            if (!leave) event.preventDefault();
+          }}
+        >
           ← 첫 화면
         </Link>
         <h1 className="text-xl font-semibold text-slate-800">관리자</h1>
@@ -261,7 +272,13 @@ export default function AdminPage() {
           <button
             key={item.id}
             type="button"
-            onClick={() => setTab(item.id)}
+            onClick={() => {
+              if (costDraft.dirty && item.id !== tab && (item.id === "sale" || tab === "sale")) {
+                const leave = window.confirm("저장하지 않은 원가 변경이 있습니다. 판매가격 화면과 원가 화면을 오가도 고객 판매가는 바뀌지 않습니다. 이동할까요?");
+                if (!leave) return;
+              }
+              setTab(item.id);
+            }}
             className={`text-sm px-3 py-1.5 rounded-lg whitespace-nowrap ${
               tab === item.id ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-100"
             }`}
@@ -278,7 +295,7 @@ export default function AdminPage() {
           : "설정을 불러오는 중입니다."}
         {saveResult ? ` · 마지막 저장: ${saveResult.text}` : ""}
       </p>
-      <CostWorkspace tab={tab} />
+      <CostWorkspace tab={tab} onDraftState={onCostDraft} />
       <main className={`max-w-3xl mx-auto p-4 md:p-6 space-y-8 ${tab === "sale" ? "" : "hidden"}`}>
         {/* 공통 */}
         <section className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
