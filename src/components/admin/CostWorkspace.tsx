@@ -43,6 +43,19 @@ function optionalNumber(text: string): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+function percentText(rate: number | undefined): string {
+  if (typeof rate !== "number" || !Number.isFinite(rate)) return "";
+  return String(Math.round(rate * 1000) / 10);
+}
+
+function purchaseLabel(unit: string): string {
+  return purchaseUnits.find((option) => option.value === unit)?.label ?? unit;
+}
+
+function usageLabel(unit: string): string {
+  return usageUnits.find((option) => option.value === unit)?.short ?? unit;
+}
+
 export function CostWorkspace({ tab }: { tab: CostTab | "sale" }) {
   const [library, setLibrary] = useState<CostLibrary | null>(null);
   const [source, setSource] = useState<string>("");
@@ -81,7 +94,7 @@ export function CostWorkspace({ tab }: { tab: CostTab | "sale" }) {
     }
     setLibrary(data.library);
     setSource("server");
-    setMessage("원가 라이브러리를 저장했습니다. 고객 견적 판매가는 바뀌지 않았습니다.");
+    setMessage("저장했습니다. 고객 화면 가격은 바뀌지 않았습니다.");
   };
 
   if (tab === "sale") return null;
@@ -89,18 +102,17 @@ export function CostWorkspace({ tab }: { tab: CostTab | "sale" }) {
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-4">
-      <p className="text-xs text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2">
-        이 화면의 매입가·공정 원가·추천 판매가는 고객 견적에 자동으로 반영되지 않습니다.
-        {source === "unconfigured" ? " 저장소가 아직 연결되지 않은 환경입니다." : ""}
-        {source === "empty" ? " 저장된 원가 자료가 없어 빈 목록으로 시작합니다." : ""}
+      <p className="text-sm text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2">
+        순서는 세 단계입니다. 원자재 가격을 적고, 추가 공정 가격을 적은 다음, 품목에 필요한 것만 붙여 견적을 봅니다.
+        여기서 만든 견적은 고객 화면 가격을 자동으로 바꾸지 않습니다.
+        {source === "unconfigured" ? " 이 컴퓨터에는 저장소가 연결되지 않았습니다." : ""}
+        {source === "empty" ? " 아직 저장된 내용이 없습니다." : ""}
         {message ? ` ${message}` : ""}
       </p>
       {tab === "materials" && <MaterialsPanel library={library} setLibrary={setLibrary} />}
       {tab === "processes" && <ProcessesPanel library={library} setLibrary={setLibrary} />}
       {tab === "products" && <ProductsPanel library={library} setLibrary={setLibrary} />}
-      {tab === "profit" && <ProfitPanel library={library} setLibrary={setLibrary} />}
       {tab === "history" && <HistoryPanel library={library} />}
-      {tab === "deploy" && <DeployPanel />}
       {tab !== "deploy" && tab !== "history" && tab !== "profit" && (
         <button
           type="button"
@@ -108,7 +120,7 @@ export function CostWorkspace({ tab }: { tab: CostTab | "sale" }) {
           disabled={saving}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
         >
-          {saving ? "저장 중" : "원가 자료 저장"}
+          {saving ? "저장 중" : "이 내용 저장"}
         </button>
       )}
     </div>
@@ -148,53 +160,66 @@ function MaterialsPanel({
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-800">원자재</h2>
+        <h2 className="text-sm font-semibold text-slate-800">1. 원자재 가격</h2>
         <button type="button" onClick={add} className="text-sm border border-slate-300 rounded-lg px-3 py-1.5">
           원자재 추가
         </button>
       </div>
-      <p className="text-xs text-slate-500">빈 금액은 미등록입니다. 0을 입력하면 비용 없음으로 저장됩니다.</p>
-      {library.materials.length === 0 && <p className="text-sm text-slate-500">등록된 원자재가 없습니다.</p>}
+      <p className="text-sm text-slate-600">필름, 원단, 티셔츠 같은 재료를 얼마에 샀는지 적습니다. 품목에 붙이기 전에는 견적에 들어가지 않습니다.</p>
+      {library.materials.length === 0 && <p className="text-sm text-slate-500">아직 적은 원자재가 없습니다.</p>}
       {library.materials.map((row) => (
         <article key={row.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="flex flex-col gap-1 text-xs text-slate-500">
               이름
-              <input className={fieldClass} value={row.label} onChange={(e) => update(row.id, { label: e.target.value })} />
+              <input className={fieldClass} placeholder="예: DTF 필름" value={row.label} onChange={(e) => update(row.id, { label: e.target.value })} />
             </label>
             <label className="flex flex-col gap-1 text-xs text-slate-500">
-              종류
-              <input className={fieldClass} value={row.kind} onChange={(e) => update(row.id, { kind: e.target.value })} />
+              어떤 재료인지
+              <input className={fieldClass} placeholder="예: 필름" value={row.kind} onChange={(e) => update(row.id, { kind: e.target.value })} />
             </label>
             <label className="flex flex-col gap-1 text-xs text-slate-500">
-              규격
-              <input className={fieldClass} value={row.spec} onChange={(e) => update(row.id, { spec: e.target.value })} />
+              규격 메모
+              <input className={fieldClass} placeholder="예: 폭 60cm" value={row.spec} onChange={(e) => update(row.id, { spec: e.target.value })} />
             </label>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <Select label="구매단위" value={row.purchaseUnit} options={purchaseUnits} onChange={(purchaseUnit) => update(row.id, { purchaseUnit: purchaseUnit as PurchaseUnit })} />
-            <Select label="사용단위" value={row.usageUnit} options={usageUnits} onChange={(usageUnit) => update(row.id, { usageUnit: usageUnit as UsageUnit })} />
-            <label className="flex flex-col gap-1 text-xs text-slate-500">
-              환산 수량
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select label="어떻게 샀나" value={row.purchaseUnit} options={purchaseUnits} onChange={(purchaseUnit) => update(row.id, { purchaseUnit: purchaseUnit as PurchaseUnit })} />
+            <Select label="견적에서 세는 단위" value={row.usageUnit} options={usageUnits} onChange={(usageUnit) => update(row.id, { usageUnit: usageUnit as UsageUnit })} />
+          </div>
+          {row.purchaseUnit === row.usageUnit ? (
+            <p className="text-xs text-slate-500">산 단위와 견적 단위가 같아서, 가격을 나누지 않습니다.</p>
+          ) : (
+            <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">
+              {purchaseLabel(row.purchaseUnit)} 1개에 들어 있는 {usageLabel(row.usageUnit)}
               <input
                 className={fieldClass}
                 type="number"
+                placeholder="예: 롤이면 50"
                 value={row.conversion ?? ""}
                 onChange={(e) => update(row.id, { conversion: optionalNumber(e.target.value), conversionStatus: e.target.value.trim() === "" ? "unconfirmed" : "confirmed" })}
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-slate-500">
-              로스율 (0.05 = 5%)
-              <input
-                className={fieldClass}
-                type="number"
-                step="0.01"
-                value={row.wasteRate ?? ""}
-                onChange={(e) => update(row.id, { wasteRate: optionalNumber(e.target.value), wasteStatus: e.target.value.trim() === "" ? "unconfirmed" : "confirmed" })}
-              />
-            </label>
-          </div>
+          )}
+          <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">
+            버리는 비율 (%)
+            <input
+              className={fieldClass}
+              type="number"
+              step="0.1"
+              placeholder="안 버리면 0, 5%면 5"
+              value={percentText(row.wasteRate)}
+              onChange={(e) => {
+                const percent = optionalNumber(e.target.value);
+                update(row.id, {
+                  wasteRate: percent == null ? undefined : percent / 100,
+                  wasteStatus: percent == null ? "unconfirmed" : "confirmed",
+                });
+              }}
+            />
+          </label>
           <AmountFields
+            title="산 가격"
             price={row.price}
             onChange={(price) => update(row.id, { price })}
           />
@@ -253,15 +278,13 @@ function ProcessesPanel({
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-800">제작 공정</h2>
+        <h2 className="text-sm font-semibold text-slate-800">2. 추가 공정 가격</h2>
         <button type="button" onClick={add} className="text-sm border border-slate-300 rounded-lg px-3 py-1.5">
           공정 추가
         </button>
       </div>
-      <p className="text-xs text-slate-500">
-        DTF 장비 참고값은 {won(library.equipment.find((row) => row.id === "dtf-equipment")?.price.amount)}/m, 상태 코드 참고값입니다. 판매단가로 쓰지 않습니다.
-      </p>
-      {library.processes.length === 0 && <p className="text-sm text-slate-500">등록된 공정이 없습니다.</p>}
+      <p className="text-sm text-slate-600">인쇄, 열프레스, 커팅, 포장처럼 재료 외에 드는 비용을 적습니다. 품목에 붙이기 전에는 견적에 들어가지 않습니다.</p>
+      {library.processes.length === 0 && <p className="text-sm text-slate-500">아직 적은 공정이 없습니다.</p>}
       {library.processes.map((row) => (
         <article key={row.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -269,14 +292,14 @@ function ProcessesPanel({
               이름
               <input className={fieldClass} value={row.label} onChange={(e) => update(row.id, { label: e.target.value })} />
             </label>
-            <Select label="비용 방식" value={row.method} options={chargeMethods} onChange={(method) => update(row.id, { method: method as ChargeMethod })} />
+            <Select label="비용을 어떻게 매기나" value={row.method} options={chargeMethods} onChange={(method) => update(row.id, { method: method as ChargeMethod })} />
           </div>
           {row.method !== "per-order" && row.method !== "per-minute" && row.variable && (
-            <AmountFields price={row.variable} onChange={(variable) => update(row.id, { variable })} />
+            <AmountFields title="이 공정 가격" price={row.variable} onChange={(variable) => update(row.id, { variable })} />
           )}
           {(row.method === "per-order" || row.method === "setup-plus-qty" || row.method === "per-minute") && (
             <AmountFields
-              title="세팅비"
+              title="주문마다 한 번 드는 기본비"
               price={row.setup ?? blankAmount("krw-per-order", seoulToday())}
               onChange={(setup) => update(row.id, { setup })}
             />
@@ -284,17 +307,17 @@ function ProcessesPanel({
           {row.method === "per-minute" && (
             <div className="space-y-3">
               <AmountFields
-                title="분당 인건비"
+                title="1분에 드는 인건비"
                 price={row.laborPerMin ?? blankAmount("krw-per-min", seoulToday())}
                 onChange={(laborPerMin) => update(row.id, { laborPerMin })}
               />
               <AmountFields
-                title="분당 장비비"
+                title="1분에 드는 기계비"
                 price={row.equipmentPerMin ?? blankAmount("krw-per-min", seoulToday())}
                 onChange={(equipmentPerMin) => update(row.id, { equipmentPerMin })}
               />
               <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">
-                작업시간 (분)
+                한 번에 걸리는 시간 (분)
                 <input
                   className={fieldClass}
                   type="number"
@@ -373,7 +396,8 @@ function ProductsPanel({
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-slate-800">판매 품목</h2>
+      <h2 className="text-sm font-semibold text-slate-800">3. 품목에 붙여 견적 내기</h2>
+      <p className="text-sm text-slate-600">앞에서 적어 둔 원자재와 공정 중에서, 이 품목에 필요한 것만 붙입니다. 같은 공정을 두 번 붙여도 됩니다.</p>
       <div className="flex flex-wrap gap-2">
         <input className={fieldClass} placeholder="새 품목 이름" value={name} onChange={(e) => setName(e.target.value)} />
         <button
@@ -403,33 +427,24 @@ function ProductsPanel({
           {library.recipes.map((row) => (
             <option key={row.productId} value={row.productId}>
               {row.label || row.productId}
-              {row.legacyQuoteId ? " · 기존 견적" : ""}
+              {row.legacyQuoteId ? " · 고객 화면에 있음" : ""}
             </option>
           ))}
         </select>
       </label>
       {recipe && (
         <article className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-600">
             {recipe.legacyQuoteId
-              ? "기존 8개 품목은 이 연결과 관계없이 지금 견적 화면의 판매가를 유지합니다."
-              : "새 품목은 고객 견적 목록에 아직 나오지 않습니다."}
+              ? "이 품목은 이미 고객 화면에 있습니다. 여기서 조립한 견적은 비교용이고, 고객 화면 가격은 그대로입니다."
+              : "새로 만든 품목은 고객 화면에 아직 나오지 않습니다."}
           </p>
-          <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">
-            고정 판매 공급가
-            <input
-              className={fieldClass}
-              type="number"
-              value={recipe.fixedSupplyPrice ?? ""}
-              onChange={(e) => patchRecipe({ fixedSupplyPrice: optionalNumber(e.target.value) })}
-            />
-          </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <RateField label="최소 이익률" value={margin?.minimumRate} onChange={(minimumRate) => patchMargin({ minimumRate })} />
-            <RateField label="목표 이익률" value={margin?.targetRate} onChange={(targetRate) => patchMargin({ targetRate })} />
-            <RateField label="높은 이익률" value={margin?.highRate} onChange={(highRate) => patchMargin({ highRate })} />
+            <PercentField label="최소로 남길 이익 (%)" value={margin?.minimumRate} onChange={(minimumRate) => patchMargin({ minimumRate })} />
+            <PercentField label="보통 남길 이익 (%)" value={margin?.targetRate} onChange={(targetRate) => patchMargin({ targetRate })} />
+            <PercentField label="많이 남길 이익 (%)" value={margin?.highRate} onChange={(highRate) => patchMargin({ highRate })} />
           </div>
-          <p className="text-xs text-slate-500">이익률 0.25는 판매가의 25%입니다. 원가에 25%를 더하는 가산율이 아닙니다.</p>
+          <p className="text-xs text-slate-500">25를 입력하면 판매가의 25%가 이익입니다. 원가에 25%를 더하는 방식이 아닙니다. 비워 두면 그 가격은 계산하지 않습니다.</p>
           <ul className="space-y-2">
             {recipe.lines.map((line) => (
               <li key={line.lineId} className="flex flex-wrap gap-2 items-center text-sm">
@@ -459,14 +474,14 @@ function ProductsPanel({
                   className="text-red-700 text-xs"
                   onClick={() => patchRecipe({ lines: recipe.lines.filter((item) => item.lineId !== line.lineId) })}
                 >
-                  줄 삭제
+                  떼기
                 </button>
               </li>
             ))}
           </ul>
           <div className="flex flex-wrap gap-2">
             <AddLine
-              label="원자재 줄 추가"
+              label="원자재 붙이기"
               options={activeMaterials.map((row) => ({ value: row.id, label: row.label || row.id }))}
               onAdd={(refId) =>
                 patchRecipe({
@@ -475,7 +490,7 @@ function ProductsPanel({
               }
             />
             <AddLine
-              label="공정 줄 추가"
+              label="공정 붙이기"
               options={activeProcesses.map((row) => ({ value: row.id, label: row.label || row.id }))}
               onAdd={(refId) =>
                 patchRecipe({
@@ -491,25 +506,25 @@ function ProductsPanel({
               disabled={!recipe.approvedSupplyPrice && recipe.fixedSupplyPrice == null}
               onChange={(e) => patchRecipe({ showOnCustomerQuote: e.target.checked })}
             />
-            고객 견적에 표시 준비
+            나중에 고객 화면에도 이 품목을 준비
           </label>
-          <p className="text-xs text-slate-500">
-            승인된 가격 또는 고정 판매가가 있을 때만 켤 수 있습니다. 고객 견적 화면은 아직 기존 8개 계산을 사용합니다.
-          </p>
+          <p className="text-xs text-slate-500">지금 고객 화면의 8개 품목 가격은 이 체크와 상관없이 유지됩니다.</p>
+          <QuotePanel library={library} setLibrary={setLibrary} productId={recipe.productId} />
         </article>
       )}
     </section>
   );
 }
 
-function ProfitPanel({
+function QuotePanel({
   library,
   setLibrary,
+  productId,
 }: {
   library: CostLibrary;
   setLibrary: (next: CostLibrary) => void;
+  productId: string;
 }) {
-  const [productId, setProductId] = useState(library.recipes[0]?.productId ?? "");
   const [qty, setQty] = useState(10);
   const [widthMm, setWidthMm] = useState(200);
   const [heightMm, setHeightMm] = useState(200);
@@ -532,7 +547,7 @@ function ProfitPanel({
       error?: string;
     };
     if (!res.ok || !data.result) {
-      setNote("수익성을 계산하지 못했습니다.");
+      setNote("견적을 계산하지 못했습니다. 붙인 항목의 가격이 비어 있는지 확인해 주세요.");
       return;
     }
     setResult(data.result);
@@ -543,7 +558,7 @@ function ProfitPanel({
   const approve = async () => {
     if (!result?.approvalAllowed || result.target?.supplyPrice == null) return;
     const accepted = window.confirm(
-      `목표 판매 공급가 ${won(result.target.supplyPrice)}을 이 품목의 승인 기록으로 남깁니다. 고객 견적 판매가는 바뀌지 않습니다.`
+      `보통 판매가 ${won(result.target.supplyPrice)}을 이 품목 기록에만 남깁니다. 고객 화면 가격은 바뀌지 않습니다.`
     );
     if (!accepted) return;
     const res = await fetch("/api/admin/pricing-approval", {
@@ -553,11 +568,11 @@ function ProfitPanel({
     });
     const data = (await res.json().catch(() => ({}))) as { library?: CostLibrary; error?: string };
     if (!res.ok || !data.library) {
-      setNote("저장소에 있는 원가로 승인하지 못했습니다. 먼저 원가 자료를 저장하세요.");
+      setNote("저장한 뒤에만 기록할 수 있습니다. 위의 저장을 먼저 눌러 주세요.");
       return;
     }
     setLibrary(data.library);
-    setNote("승인 금액을 품목 기록에 남겼습니다. 고객 견적 판매가는 그대로입니다.");
+    setNote("보통 판매가를 기록했습니다. 고객 화면 가격은 그대로입니다.");
   };
 
   const record = async () => {
@@ -592,80 +607,64 @@ function ProfitPanel({
         },
       }),
     });
-    setNote(res.ok ? "이 계산을 견적 이력에 남겼습니다." : "이력을 저장하지 못했습니다.");
+    setNote(res.ok ? "이 견적을 기록에 남겼습니다." : "기록을 저장하지 못했습니다.");
   };
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-slate-800">수익성</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <label className="flex flex-col gap-1 text-xs text-slate-500 col-span-2">
-          품목
-          <select className={fieldClass} value={productId} onChange={(e) => setProductId(e.target.value)}>
-            {library.recipes.map((row) => (
-              <option key={row.productId} value={row.productId}>
-                {row.label || row.productId}
-              </option>
-            ))}
-          </select>
-        </label>
+    <section className="space-y-3 border-t border-slate-200 pt-3">
+      <h3 className="text-sm font-semibold text-slate-800">이 조립으로 견적 보기</h3>
+      <div className="grid grid-cols-3 gap-3">
         <NumberField label="수량" value={qty} onChange={setQty} />
         <NumberField label="가로 mm" value={widthMm} onChange={setWidthMm} />
         <NumberField label="세로 mm" value={heightMm} onChange={setHeightMm} />
       </div>
-      <p className="text-xs text-slate-500">배치 길이는 세로를 진행 방향으로 보고, 시트 매수는 A4 배치 수로 계산합니다.</p>
+      <p className="text-xs text-slate-500">길이가 필요하면 세로를 진행 방향으로 봅니다. 시트는 A4에 몇 장 들어가는지로 셉니다.</p>
       <button type="button" onClick={() => void run()} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm">
-        수익성 계산
+        견적 계산
       </button>
       {note && <p className="text-sm text-slate-700">{note}</p>}
       {result && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 text-sm">
-          {result.lines.length === 0 && result.missing.includes("레시피 없음") && <p>레시피 없음</p>}
-          {result.lines.length === 0 && !result.missing.includes("레시피 없음") && <p>연결된 원자재·공정이 없습니다.</p>}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-sm">
+          {result.lines.length === 0 && <p>아직 붙인 원자재나 공정이 없습니다.</p>}
           <ul className="space-y-1">
             {result.lines.map((line) => (
               <li key={line.lineId}>
                 {line.name} · {line.usageQty ?? "—"}
-                {line.unitLabel ?? ""} · {line.status === "missing" ? line.reason : won(line.supplyCost)}
+                {line.unitLabel ?? ""} · {line.status === "missing" ? `가격을 낼 수 없음 (${line.reason})` : won(line.supplyCost)}
               </li>
             ))}
           </ul>
           {result.missing.length > 0 && (
-            <p className="text-red-700">미등록: {result.missing.join(", ")}. 추천 판매가는 비워 둡니다.</p>
+            <p className="text-red-700">가격이 비어 있어 판매가를 만들지 않습니다. {result.missing.join(", ")}</p>
           )}
-          {result.supplyCost != null && <p>총제작원가 {won(result.supplyCost)} · 변동비 {won(result.variableCost)} · 고정비 {won(result.fixedCost)}</p>}
-          <Band title="최소 수익성 가격" band={result.minimum} />
-          <Band title="목표 판매가격" band={result.target} />
-          <Band title="높은 수익성 가격" band={result.high} />
-          <p>최소 판매가격 {won(result.minimumSalePrice)}</p>
+          {result.supplyCost != null && <p>만든 원가 {won(result.supplyCost)}. 이 중 수량에 따라 늘어나는 비용 {won(result.variableCost)}, 주문마다 한 번인 비용 {won(result.fixedCost)}.</p>}
+          <Band title="최소로 팔 가격" band={result.minimum} />
+          <Band title="보통 판매가" band={result.target} />
+          <Band title="여유 있게 팔 가격" band={result.high} />
+          {result.minimumSalePrice != null && <p>이 품목에 정해 둔 최저 판매가까지 반영하면 {won(result.minimumSalePrice)}</p>}
           {result.current && (
             <p>
-              현재 웹 견적 {result.current.label} {result.current.error ?? won(result.current.supplyPrice)}
-              {result.current.finalPrice != null ? ` · UV 최종가 ${won(result.current.finalPrice)}` : ""}
-              {result.deltaSupply != null ? ` · 목표와의 차액 ${won(result.deltaSupply)} (${pct(result.deltaRate)})` : ""}
+              지금 고객 화면 {result.current.label} {result.current.error ?? won(result.current.supplyPrice)}
+              {result.current.finalPrice != null ? ` · 화면 최종가 ${won(result.current.finalPrice)}` : ""}
+              {result.deltaSupply != null ? ` · 보통 판매가와 차이 ${won(result.deltaSupply)}` : ""}
             </p>
           )}
           {result.contribution != null && (
-            <p>
-              공헌이익 {won(result.contribution)} · 이익률 {pct(result.contributionMargin)}
-            </p>
+            <p>고객 화면 가격에서 늘어나는 비용을 빼면 {won(result.contribution)} 남습니다 ({pct(result.contributionMargin)}).</p>
           )}
-          {result.belowTarget && <p className="text-amber-800">목표 이익률 미달. 판매가는 바꾸지 않습니다.</p>}
-          {result.referenceSimulation && <p>참고 시뮬레이션입니다. 코드 참고값만으로는 승인할 수 없습니다.</p>}
-          <p className="text-xs text-slate-500">
-            원가 개정 {result.costLibraryRevision} · 판매 개정 {saleRevision ?? "—"} · 이익률 적용일 {result.marginEffectiveFrom ?? "—"} · 부가세율 {result.vatRateUsed}
-          </p>
-          <div className="flex flex-wrap gap-2">
+          {result.belowTarget && <p className="text-amber-800">지금 고객 화면 가격이 보통 판매가보다 낮습니다. 화면 가격은 바꾸지 않습니다.</p>}
+          {result.referenceSimulation && <p>아직 확인하지 않은 참고 금액이 있어, 이 판매가를 확정 기록할 수 없습니다.</p>}
+          <div className="flex flex-wrap gap-2 pt-1">
             <button type="button" disabled={!result.approvalAllowed} onClick={() => void approve()} className="border border-slate-300 rounded-lg px-3 py-1.5 disabled:opacity-40">
-              목표 가격 승인 기록
+              보통 판매가만 기록
             </button>
             <button type="button" onClick={() => void record()} className="border border-slate-300 rounded-lg px-3 py-1.5">
-              이 계산을 이력에 남기기
+              이 견적을 기록에 남기기
             </button>
           </div>
           {drops.length > 0 && (
             <p className="text-xs text-amber-800">
-              수량이 늘면 표시 금액이 내려가는 구간이 있습니다. 예: {drops[0]?.qty}개 {won(drops[0]?.price)} (이전 {won(drops[0]?.previous)}). 기존 판매가는 그대로입니다.
+              개수가 늘면 고객 화면 금액이 내려가는 구간이 있습니다. 예: {drops[0]?.qty}개 {won(drops[0]?.price)}. 그 가격은 여기서 고치지 않습니다.
             </p>
           )}
         </div>
@@ -701,16 +700,16 @@ function HistoryPanel({ library }: { library: CostLibrary }) {
     <section className="space-y-3">
       <h2 className="text-sm font-semibold text-slate-800">견적 이력</h2>
       {note && <p className="text-sm text-slate-600">{note}</p>}
-      {entries.length === 0 && <p className="text-sm text-slate-500">남긴 계산이 없습니다. 수익성 화면에서 이력으로 저장합니다.</p>}
+      {entries.length === 0 && <p className="text-sm text-slate-500">남긴 견적이 없습니다. 품목 조립에서 견적을 계산한 뒤 기록하면 여기에 남습니다.</p>}
       <ul className="space-y-2">
         {entries.map((entry) => (
           <li key={entry.id} className="bg-white border border-slate-200 rounded-xl p-3 text-sm">
             <p>
               {entry.createdAt} · {library.recipes.find((row) => row.productId === entry.productId)?.label ?? entry.productId}
             </p>
-            <p>당시 판매 공급가 {won(entry.presentedSupplyPrice)}</p>
+            <p>그때 고객에게 보인 가격 {won(entry.presentedSupplyPrice)}</p>
             <p className="text-xs text-slate-500">
-              당시 원가 {won(entry.internal?.supplyCost)} · 당시 목표 추천가 {won(entry.internal?.targetSupplyPrice)}
+              그때 원가 {won(entry.internal?.supplyCost)} · 그때 보통 판매가 {won(entry.internal?.targetSupplyPrice)}
               {entry.internal?.missing?.length ? ` · 미등록 ${entry.internal.missing.join(", ")}` : ""}
             </p>
           </li>
@@ -720,29 +719,8 @@ function HistoryPanel({ library }: { library: CostLibrary }) {
   );
 }
 
-function DeployPanel() {
-  const items = [
-    "테스트와 빌드가 통과한 뒤에만 배포합니다.",
-    "기존 8개 품목의 공급가와 총액이 기준선과 같은지 확인합니다.",
-    "관리자 로그인 후에만 원가 화면이 열리는지 확인합니다. 공개 견적의 8개 금액은 그대로입니다.",
-    "운영 판매 설정을 덮어쓰지 않습니다. 원가 자료는 별도 키에만 저장합니다.",
-    "고객 견적은 기존 계산을 유지합니다. 추천가를 승인해도 판매 단가는 자동으로 바뀌지 않습니다.",
-    "되돌릴 때는 직전 배포로 재배포합니다. 판매 설정 복구 쓰기는 하지 않습니다.",
-  ];
-  return (
-    <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-      <h2 className="text-sm font-semibold text-slate-800">배포 점검</h2>
-      <ol className="list-decimal pl-5 text-sm text-slate-700 space-y-1">
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
 function AmountFields({
-  title = "매입가",
+  title = "가격",
   price,
   onChange,
 }: {
@@ -774,7 +752,7 @@ function AmountFields({
           }}
         />
       </label>
-      <Select label="단위" value={price.unit} options={costUnits} onChange={(unit) => onChange({ ...price, unit: unit as CostUnit })} />
+      <Select label="이 금액은" value={price.unit} options={costUnits} onChange={(unit) => onChange({ ...price, unit: unit as CostUnit })} />
       <Select
         label="부가세"
         value={price.tax}
@@ -785,7 +763,7 @@ function AmountFields({
         onChange={(tax) => onChange({ ...price, tax: tax as CostAmount["tax"] })}
       />
       <label className="flex flex-col gap-1 text-xs text-slate-500">
-        적용일
+        가격 시작일
         <input className={fieldClass} type="date" value={price.effectiveFrom} onChange={(e) => onChange({ ...price, effectiveFrom: e.target.value })} />
       </label>
     </div>
@@ -817,11 +795,14 @@ function Select({
   );
 }
 
-function RateField({ label, value, onChange }: { label: string; value?: number; onChange: (value: number | undefined) => void }) {
+function PercentField({ label, value, onChange }: { label: string; value?: number; onChange: (value: number | undefined) => void }) {
   return (
     <label className="flex flex-col gap-1 text-xs text-slate-500">
       {label}
-      <input className={fieldClass} type="number" step="0.01" value={value ?? ""} onChange={(e) => onChange(optionalNumber(e.target.value))} />
+      <input className={fieldClass} type="number" step="1" value={percentText(value)} onChange={(e) => {
+        const percent = optionalNumber(e.target.value);
+        onChange(percent == null ? undefined : percent / 100);
+      }} />
     </label>
   );
 }
@@ -873,40 +854,40 @@ function AddLine({
 }
 
 const purchaseUnits = [
-  { value: "roll", label: "롤" },
-  { value: "box", label: "박스" },
-  { value: "m", label: "m" },
-  { value: "m2", label: "㎡" },
-  { value: "sheet", label: "장" },
-  { value: "ea", label: "개" },
+  { value: "roll", label: "롤로 구매" },
+  { value: "box", label: "상자로 구매" },
+  { value: "m", label: "미터로 구매" },
+  { value: "m2", label: "제곱미터로 구매" },
+  { value: "sheet", label: "장으로 구매" },
+  { value: "ea", label: "개로 구매" },
 ];
 const usageUnits = [
-  { value: "m", label: "m" },
-  { value: "m2", label: "㎡" },
-  { value: "sheet", label: "장" },
-  { value: "ea", label: "개" },
+  { value: "m", label: "미터로 계산", short: "미터" },
+  { value: "m2", label: "제곱미터로 계산", short: "제곱미터" },
+  { value: "sheet", label: "장으로 계산", short: "장" },
+  { value: "ea", label: "개로 계산", short: "개" },
 ];
 const costUnits = [
-  { value: "krw-per-m", label: "원/m" },
-  { value: "krw-per-m2", label: "원/㎡" },
-  { value: "krw-per-sheet", label: "원/장" },
-  { value: "krw-per-ea", label: "원/개" },
-  { value: "krw-per-min", label: "원/분" },
-  { value: "krw-per-order", label: "원/주문" },
+  { value: "krw-per-m", label: "1미터 가격" },
+  { value: "krw-per-m2", label: "1제곱미터 가격" },
+  { value: "krw-per-sheet", label: "1장 가격" },
+  { value: "krw-per-ea", label: "1개 가격" },
+  { value: "krw-per-min", label: "1분 가격" },
+  { value: "krw-per-order", label: "주문 1건 가격" },
 ];
 const chargeMethods = [
-  { value: "per-ea", label: "개당" },
-  { value: "per-sheet", label: "장당" },
-  { value: "per-m", label: "m당" },
-  { value: "per-m2", label: "㎡당" },
-  { value: "per-minute", label: "작업시간당" },
-  { value: "per-order", label: "주문당 고정" },
-  { value: "setup-plus-qty", label: "세팅비 + 수량" },
+  { value: "per-ea", label: "한 개마다" },
+  { value: "per-sheet", label: "한 장마다" },
+  { value: "per-m", label: "1미터마다" },
+  { value: "per-m2", label: "1제곱미터마다" },
+  { value: "per-minute", label: "작업 시간으로" },
+  { value: "per-order", label: "주문 한 건에 한 번" },
+  { value: "setup-plus-qty", label: "기본비 + 개당" },
 ];
 const usageOptions = [
-  { value: "per-order", label: "주문당" },
-  { value: "per-piece", label: "개당" },
-  { value: "per-meter-layout", label: "배치 길이(m)" },
-  { value: "per-sheet-imposition", label: "시트 매수" },
-  { value: "per-m2", label: "면적(㎡)" },
+  { value: "per-order", label: "주문마다 1번" },
+  { value: "per-piece", label: "한 개마다" },
+  { value: "per-meter-layout", label: "세로 길이만큼" },
+  { value: "per-sheet-imposition", label: "시트 장수만큼" },
+  { value: "per-m2", label: "면적만큼" },
 ];

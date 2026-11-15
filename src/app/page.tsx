@@ -95,7 +95,7 @@ export default function Home() {
 
         <section className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-slate-700">관리자</h2>
-          <p className="text-xs text-slate-500 mt-1 mb-4">판매가격, 원자재, 제작 공정 입력</p>
+          <p className="text-xs text-slate-500 mt-1 mb-4">원자재와 공정을 적어 품목에 붙여 견적을 봅니다</p>
 
           {!adminLoginOpen ? (
             <button
