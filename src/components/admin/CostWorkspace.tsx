@@ -19,8 +19,10 @@ import type {
   CostAmount,
   CostLibrary,
   CostUnit,
+  EquipmentCost,
   MaterialCost,
   ProcessDef,
+  ProductGroup,
   ProductRecipe,
   PurchaseUnit,
   QtyPriceBand,
@@ -67,8 +69,8 @@ function methodHint(method: string): string {
   if (method === "per-m") return "예: DTF 출력은 1m마다 800원. 필름비는 원자재에 적습니다.";
   if (method === "per-m2") return "예: 넓은 출력은 1제곱미터마다 금액을 적습니다.";
   if (method === "per-minute") return "예: 1분 인건비와 기계비, 걸리는 시간을 적습니다.";
-  if (method === "per-order") return "예: 디자인비는 주문 한 건에 8,000원.";
-  return "예: 열프레스는 기본 준비비에 개당 작업비를 더합니다.";
+  if (method === "per-order") return "예: 디자인비는 주문 한 건에 8,000원. 최소 작업비보다 크면 최소 작업비를 더하지 않습니다.";
+  return "예: 열프레스는 기본 준비비에 개당 작업비를 더합니다. 합계가 최소 작업비보다 작을 때만 최소 작업비로 맞춥니다.";
 }
 
 function usageHint(unit: string): string {
@@ -217,7 +219,7 @@ export function CostWorkspace({
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-4">
       <div className={`text-sm rounded-lg px-3 py-2 border ${source === "server" && !dirty ? "bg-white border-slate-200 text-slate-700" : "bg-amber-50 border-amber-200 text-amber-950"}`}>
-        <p>순서는 네 단계입니다. 원자재를 적고, 제작 공정을 적고, 판매 품목에 붙인 다음, 수량별 견적을 확인합니다. 여기서 만든 견적은 고객 화면 가격을 자동으로 바꾸지 않습니다.</p>
+        <p>원자재와 제작 공정을 먼저 등록하고, 판매 품목에 붙인 뒤 견적을 작성합니다. 여기서 만든 견적은 고객 화면 가격을 자동으로 바꾸지 않습니다.</p>
         <p className="mt-1">{storageText}</p>
         <p className="mt-1 font-medium">{serverSaved ? "저장 상태: 운영 서버에 저장됨" : devSaved ? "저장 상태: 개발 서버에 저장됨" : "저장 상태: 운영 서버에 저장되지 않음"}</p>
         {message && <p className="mt-1">{message}</p>}
@@ -402,7 +404,7 @@ function MaterialsPanel({
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-slate-800">1. 원자재</h2>
+        <h2 className="text-sm font-semibold text-slate-800">1. 원자재 관리</h2>
         <button type="button" onClick={add} className="text-sm border border-slate-300 rounded-lg px-3 py-1.5">원자재 추가</button>
       </div>
       <p className="text-sm text-slate-600">목록에서 찾고, 수정은 한 건씩 엽니다. 품목에 붙은 원자재는 삭제하지 않고 비활성화합니다.</p>
@@ -485,10 +487,35 @@ function MaterialFields({ row, update }: { row: MaterialCost; update: (patch: Pa
         </label>
       )}
       {(row.purchaseUnit === "roll" || row.usageUnit === "m") && (
-        <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">롤 폭 (mm)
-          <input className={fieldClass} type="number" placeholder="예: 600. 배치 견적에만 사용" value={row.rollWidthMm ?? ""} onChange={(e) => update({ rollWidthMm: optionalNumber(e.target.value) })} />
-          <span>규격 글자와 별개입니다. 비우면 롤 배치 견적을 만들지 않습니다.</span>
-        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1 text-xs text-slate-500">롤 폭 (mm)
+            <input className={fieldClass} type="number" placeholder="예: 600. 배치 견적에만 사용" value={row.rollWidthMm ?? ""} onChange={(e) => update({ rollWidthMm: optionalNumber(e.target.value) })} />
+            <span>규격 글자와 별개입니다. 비우면 롤 배치 견적을 만들지 않습니다.</span>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-slate-500">롤 길이 (m)
+            <input className={fieldClass} type="number" placeholder="기록용. 배치 길이 계산에는 쓰지 않음" value={row.rollLengthM ?? ""} onChange={(e) => update({ rollLengthM: optionalNumber(e.target.value) })} />
+          </label>
+        </div>
+      )}
+      {(row.purchaseUnit === "sheet" || row.usageUnit === "sheet") && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label className="flex flex-col gap-1 text-xs text-slate-500">판재 가로 (mm)
+            <input className={fieldClass} type="number" placeholder="예: 1000" value={row.sheetWidthMm ?? ""} onChange={(e) => update({ sheetWidthMm: optionalNumber(e.target.value) })} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-slate-500">판재 세로 (mm)
+            <input className={fieldClass} type="number" placeholder="예: 500" value={row.sheetHeightMm ?? ""} onChange={(e) => update({ sheetHeightMm: optionalNumber(e.target.value) })} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-slate-500">두께 (mm)
+            <input className={fieldClass} type="number" placeholder="기록용" value={row.thicknessMm ?? ""} onChange={(e) => update({ thicknessMm: optionalNumber(e.target.value) })} />
+          </label>
+          <label className="sm:col-span-3 flex flex-col gap-1 text-xs text-slate-500 max-w-xs">판재 재료비
+            <select className={fieldClass} value={row.sheetCharge ?? "full"} onChange={(e) => update({ sheetCharge: e.target.value === "share" ? "share" : "full" })}>
+              <option value="full">판재 전체 사용</option>
+              <option value="share">사용량 비례</option>
+            </select>
+          </label>
+          <p className="sm:col-span-3 text-xs text-slate-500">비우면 시트 배치는 기존처럼 A4로 계산하고, 그 사실을 견적에 표시합니다. 아크릴 판재는 가로와 세로를 입력하세요. 전체 사용은 필요한 장수만큼, 사용량 비례는 한 장에 들어가는 개수 중 주문 수량만큼만 재료비에 넣습니다. 비례는 남은 판재를 다시 쓸 수 있을 때의 방식이고 로스율은 그 수량에 한 번 적용됩니다. 출력·커팅 공정비는 어느 쪽이든 필요한 장수로 계산합니다.</p>
+        </div>
       )}
       <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">버리는 비율 (%) (필수)
         <input className={fieldClass} type="number" step="0.1" placeholder="안 버리면 0, 5%면 5" value={percentText(row.wasteRate)} onChange={(e) => {
@@ -552,7 +579,7 @@ function ProcessesPanel({
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-slate-800">2. 제작 공정</h2>
+        <h2 className="text-sm font-semibold text-slate-800">2. 제작 공정 관리</h2>
         <button type="button" onClick={add} className="text-sm border border-slate-300 rounded-lg px-3 py-1.5">공정 추가</button>
       </div>
       <p className="text-sm text-slate-600">공정명으로 찾고, 상세 설정은 수정할 때만 엽니다. 품목에 붙은 공정은 삭제하지 않고 비활성화합니다.</p>
@@ -567,6 +594,7 @@ function ProcessesPanel({
           <option value="name">이름순</option>
         </select>
       </div>
+      <EquipmentSetup library={library} setLibrary={setLibrary} />
       <p className="text-xs text-slate-500">{view.total}개 중 {view.total === 0 ? 0 : view.start + 1}–{Math.min(view.start + CATALOG_PAGE_SIZE, view.total)}개</p>
       {view.rows.length === 0 && <p className="text-sm text-slate-500">찾는 공정이 없습니다.</p>}
       <ul className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
@@ -591,7 +619,11 @@ function ProcessesPanel({
       </div>
       {editing && (
         <EditorModal title={editing.label || "공정 수정"} onClose={() => setEditingId(null)}>
-          <ProcessFields row={editing} update={(patch) => update(editing.id, patch)} />
+          <ProcessFields
+            row={editing}
+            equipment={library.equipment}
+            update={(patch) => update(editing.id, patch)}
+          />
           {!used.has(editing.id) && (
             <button type="button" className="text-sm text-red-700" onClick={() => {
               const next = removeProcess(library, editing.id);
@@ -607,7 +639,81 @@ function ProcessesPanel({
   );
 }
 
-function ProcessFields({ row, update }: { row: ProcessDef; update: (patch: Partial<ProcessDef>) => void }) {
+function EquipmentSetup({
+  library,
+  setLibrary,
+}: {
+  library: CostLibrary;
+  setLibrary: (next: CostLibrary) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const update = (id: string, patch: Partial<EquipmentCost>) => {
+    setLibrary({
+      ...library,
+      equipment: library.equipment.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+    });
+  };
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+      <p className="text-sm font-medium text-slate-800">장비 준비비</p>
+      <p className="text-xs text-slate-500">같은 장비를 쓰는 공정이 한 주문에 여러 개여도 준비비는 한 번만 계산합니다. 공정 기본비 칸에 같은 금액을 또 적지 마세요.</p>
+      <div className="flex flex-wrap gap-2">
+        <input className={fieldClass} placeholder="예: UV 출력기" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <button
+          type="button"
+          className="text-sm border border-slate-300 rounded-lg px-3 py-1.5"
+          onClick={() => {
+            const name = label.trim();
+            if (!name) return;
+            const row: EquipmentCost = {
+              id: newCostId("equip"),
+              label: name,
+              history: [],
+              price: blankAmount("krw-per-order", seoulToday()),
+              setup: blankAmount("krw-per-order", seoulToday()),
+            };
+            setLibrary({ ...library, equipment: [...library.equipment, row] });
+            setLabel("");
+          }}
+        >
+          장비 추가
+        </button>
+      </div>
+      <ul className="space-y-2">
+        {library.equipment.map((row) => (
+          <li key={row.id} className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <input className={fieldClass} aria-label="장비 이름" value={row.label} onChange={(e) => update(row.id, { label: e.target.value })} />
+            <label className="flex flex-col gap-1 text-xs text-slate-500">준비비 (원)
+              <input
+                className={fieldClass}
+                type="number"
+                placeholder="없으면 비움"
+                value={row.setup?.amount ?? ""}
+                onChange={(e) => update(row.id, {
+                  setup: {
+                    ...(row.setup ?? blankAmount("krw-per-order", seoulToday())),
+                    amount: optionalNumber(e.target.value),
+                    status: e.target.value.trim() === "" ? "unconfirmed" : "confirmed",
+                  },
+                })}
+              />
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ProcessFields({
+  row,
+  equipment,
+  update,
+}: {
+  row: ProcessDef;
+  equipment: EquipmentCost[];
+  update: (patch: Partial<ProcessDef>) => void;
+}) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -623,6 +729,17 @@ function ProcessFields({ row, update }: { row: ProcessDef; update: (patch: Parti
       </div>
       <Select label="비용을 어떻게 매기나" value={row.method} options={chargeMethods} onChange={(method) => update({ method: method as ChargeMethod })} />
       <p className="text-xs text-slate-500">{methodHint(row.method)}</p>
+      <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">사용 장비
+        <select className={fieldClass} value={row.equipmentId ?? ""} onChange={(e) => update({ equipmentId: e.target.value || undefined })}>
+          <option value="">장비 없음. 이 공정 준비비만 계산</option>
+          {equipment.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        </select>
+      </label>
+      <p className="text-xs text-slate-500">재료비는 원자재에 적습니다. 이 화면의 금액은 준비비, 수량·시간 작업비, 최소 작업비입니다.</p>
+      <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">최소 작업비 (원)
+        <input className={fieldClass} type="number" placeholder="없으면 비움" value={row.minCharge ?? ""} onChange={(e) => update({ minCharge: optionalNumber(e.target.value) })} />
+      </label>
+      <p className="text-xs text-slate-500">준비비와 수량 작업비를 더한 뒤, 그 합이 최소 작업비보다 작을 때만 최소 작업비로 올립니다. 두 금액을 더해 청구하지 않습니다.</p>
       {row.method !== "per-order" && row.method !== "per-minute" && row.variable && (
         <AmountFields title="이 공정 가격" price={row.variable} onChange={(variable) => update({ variable })} />
       )}
@@ -643,9 +760,6 @@ function ProcessFields({ row, update }: { row: ProcessDef; update: (patch: Parti
       <details className="text-sm">
         <summary className="cursor-pointer text-slate-700">추가 설정</summary>
         <div className="space-y-3 mt-2">
-          <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">최소 작업비 (원)
-            <input className={fieldClass} type="number" placeholder="없으면 비움" value={row.minCharge ?? ""} onChange={(e) => update({ minCharge: optionalNumber(e.target.value) })} />
-          </label>
           <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">이 수량보다 많으면 확인
             <input className={fieldClass} type="number" placeholder="예: 500" value={row.reviewAboveQty ?? ""} onChange={(e) => update({ reviewAboveQty: optionalNumber(e.target.value) })} />
           </label>
@@ -724,6 +838,57 @@ function RecipeLines({
                             <option key={option.value} value={option.value}>{option.label}</option>
                           ))}
                         </select>
+                        <select
+                          className={fieldClass}
+                          aria-label="적용 옵션"
+                          value={line.optionId ?? ""}
+                          onChange={(e) =>
+                            patchRecipe({
+                              lines: recipe.lines.map((item) =>
+                                item.lineId === line.lineId ? { ...item, optionId: e.target.value || undefined } : item
+                              ),
+                            })
+                          }
+                        >
+                          <option value="">항상 포함</option>
+                          {(recipe.options ?? []).map((option) => (
+                            <option key={option.id} value={option.id}>{option.label}</option>
+                          ))}
+                        </select>
+                        {line.usage === "per-sheet-imposition" && (
+                          <>
+                            <label className="flex items-center gap-1 text-xs text-slate-500">
+                              <input
+                                type="checkbox"
+                                checked={line.allowRotate !== false}
+                                onChange={(e) =>
+                                  patchRecipe({
+                                    lines: recipe.lines.map((item) =>
+                                      item.lineId === line.lineId ? { ...item, allowRotate: e.target.checked } : item
+                                    ),
+                                  })
+                                }
+                              />
+                              90도 회전 허용
+                            </label>
+                            <label className="flex items-center gap-1 text-xs text-slate-500">
+                              수동 한 장당
+                              <input
+                                className={`${fieldClass} w-16`}
+                                type="number"
+                                placeholder="자동"
+                                value={line.manualPerSheet ?? ""}
+                                onChange={(e) =>
+                                  patchRecipe({
+                                    lines: recipe.lines.map((item) =>
+                                      item.lineId === line.lineId ? { ...item, manualPerSheet: optionalNumber(e.target.value) } : item
+                                    ),
+                                  })
+                                }
+                              />
+                            </label>
+                          </>
+                        )}
                         <label className="flex items-center gap-1 text-xs text-slate-500">
                           적용 횟수
                           <input
@@ -773,6 +938,69 @@ function RecipeLines({
   );
 }
 
+function ProductGroups({
+  library,
+  setLibrary,
+}: {
+  library: CostLibrary;
+  setLibrary: (next: CostLibrary) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const groups = [...(library.groups ?? [])].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko"));
+  const save = (next: ProductGroup[]) => setLibrary({ ...library, groups: next.map((row, index) => ({ ...row, sortOrder: index })) });
+  const move = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= groups.length) return;
+    const next = [...groups];
+    const [row] = next.splice(index, 1);
+    if (row) next.splice(target, 0, row);
+    save(next);
+  };
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+      <p className="text-sm font-medium text-slate-800">품목 그룹</p>
+      <div className="flex flex-wrap gap-2">
+        <input className={fieldClass} placeholder="예: 굿즈·아크릴" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <button
+          type="button"
+          className="text-sm border border-slate-300 rounded-lg px-3 py-1.5"
+          onClick={() => {
+            const name = label.trim();
+            if (!name) return;
+            save([...groups, { id: newCostId("group"), label: name, sortOrder: groups.length, active: true }]);
+            setLabel("");
+          }}
+        >
+          그룹 추가
+        </button>
+      </div>
+      {groups.length === 0 && <p className="text-xs text-slate-500">그룹이 없습니다. 스티커·라벨, 의류·DTF, 굿즈·아크릴처럼 나눠 둘 수 있습니다.</p>}
+      <ul className="space-y-2">
+        {groups.map((group, index) => (
+          <li key={group.id} className={`flex flex-wrap items-center gap-2 text-sm ${group.active ? "" : "opacity-60"}`}>
+            <input
+              className={fieldClass}
+              aria-label="그룹 이름"
+              value={group.label}
+              onChange={(e) => save(groups.map((row) => (row.id === group.id ? { ...row, label: e.target.value } : row)))}
+            />
+            <button type="button" className="text-xs text-slate-600" disabled={index === 0} onClick={() => move(index, -1)}>위로</button>
+            <button type="button" className="text-xs text-slate-600" disabled={index === groups.length - 1} onClick={() => move(index, 1)}>아래로</button>
+            <button
+              type="button"
+              className="text-xs text-slate-600"
+              onClick={() => save(groups.map((row) => (row.id === group.id ? { ...row, active: !row.active } : row)))}
+            >
+              {group.active ? "비활성화" : "다시 사용"}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-slate-500">그룹과 순서는 원가 저장소에 함께 저장됩니다. 다른 기기에서는 저장한 뒤에 같습니다.</p>
+    </div>
+  );
+}
+
 function ProductsPanel({
   library,
   setLibrary,
@@ -782,7 +1010,15 @@ function ProductsPanel({
 }) {
   const [selected, setSelected] = useState(library.recipes[0]?.productId ?? "");
   const [name, setName] = useState("");
+  const [query, setQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const recipe = library.recipes.find((row) => row.productId === selected);
+  const visibleRecipes = [...library.recipes]
+    .filter((row) => (groupFilter ? row.groupId === groupFilter : true))
+    .filter((row) => (favoritesOnly ? row.favorite : true))
+    .filter((row) => matchesQuery(row.label, row.legacyQuoteId ?? "", query))
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.label.localeCompare(b.label, "ko"));
   const today = seoulToday();
   const margin = recipe ? upsertMargin(library, recipe.productId, today) : undefined;
   const activeMaterials = library.materials.filter((row) => row.active);
@@ -809,8 +1045,9 @@ function ProductsPanel({
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-slate-800">3. 품목에 붙여 견적 내기</h2>
-      <p className="text-sm text-slate-600">앞에서 적어 둔 원자재와 공정 중에서, 이 품목에 필요한 것만 붙입니다. 같은 공정을 두 번 붙여도 됩니다.</p>
+      <h2 className="text-sm font-semibold text-slate-800">3. 판매 품목 관리</h2>
+      <p className="text-sm text-slate-600">원자재와 공정을 품목에 붙입니다. 포장이나 양면처럼 고를 때만 쓰는 항목은 옵션에 연결하세요. 양면이라고 자동으로 두 배가 되지는 않습니다.</p>
+      <ProductGroups library={library} setLibrary={setLibrary} />
       <div className="flex flex-wrap gap-2">
         <input className={fieldClass} placeholder="새 품목 이름" value={name} onChange={(e) => setName(e.target.value)} />
         <button
@@ -859,11 +1096,25 @@ function ProductsPanel({
           이 품목 복제
         </button>
       </div>
-      <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <input className={fieldClass} placeholder="품목 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <select className={fieldClass} value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+          <option value="">그룹 전체</option>
+          {(library.groups ?? []).filter((group) => group.active).map((group) => (
+            <option key={group.id} value={group.id}>{group.label}</option>
+          ))}
+        </select>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={favoritesOnly} onChange={(e) => setFavoritesOnly(e.target.checked)} />
+          자주 사용하는 품목
+        </label>
+      </div>
+      <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-md">
         품목
         <select className={fieldClass} value={selected} onChange={(e) => setSelected(e.target.value)}>
-          {library.recipes.map((row) => (
+          {visibleRecipes.map((row) => (
             <option key={row.productId} value={row.productId}>
+              {row.favorite ? "★ " : ""}
               {row.label || row.productId}
               {row.legacyQuoteId ? " · 고객 화면에 있음" : ""}
             </option>
@@ -880,8 +1131,72 @@ function ProductsPanel({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <PercentField label="최소 확보 이익률 (%)" value={margin?.minimumRate ?? DEFAULT_MINIMUM_RATE} onChange={(minimumRate) => patchMargin({ minimumRate })} />
             <PercentField label="목표 이익률 (%)" value={margin?.targetRate ?? DEFAULT_TARGET_RATE} onChange={(targetRate) => patchMargin({ targetRate })} />
+            <label className="flex flex-col gap-1 text-xs text-slate-500">그룹
+              <select className={fieldClass} value={recipe.groupId ?? ""} onChange={(e) => patchRecipe({ groupId: e.target.value || undefined })}>
+                <option value="">그룹 없음</option>
+                {(library.groups ?? []).map((group) => (
+                  <option key={group.id} value={group.id}>{group.label}{group.active ? "" : " · 비활성"}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-slate-500">확정 판매가 (선택)
+              <input className={fieldClass} type="number" placeholder="비워 두면 추천가만 계산" value={recipe.approvedSupplyPrice ?? ""} onChange={(e) => patchRecipe({ approvedSupplyPrice: optionalNumber(e.target.value) })} />
+            </label>
           </div>
-          <p className="text-xs text-slate-500">기본값은 최소 20%, 목표 35%입니다. 추천 공급가 = 총제작원가 ÷ (1 - 목표 이익률)입니다. 원가에 35%를 더하는 방식이 아닙니다. 특별한 품목만 이 칸을 바꿉니다.</p>
+          <p className="text-xs text-slate-500">기본값은 최소 20%, 목표 35%입니다. 추천 공급가 = 총제작원가 ÷ (1 - 목표 이익률)입니다. 확정 판매가는 추천가와 다른 값이며, 고객 8개 화면 가격은 바꾸지 않습니다.</p>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={recipe.favorite === true} onChange={(e) => patchRecipe({ favorite: e.target.checked })} />
+            자주 사용하는 품목
+          </label>
+          <div className="space-y-2">
+            <p className="text-sm text-slate-700">주문 때 고르는 옵션</p>
+            {(recipe.options ?? []).map((option) => (
+              <div key={option.id} className="flex flex-wrap gap-2 items-center">
+                <input
+                  className={fieldClass}
+                  aria-label="옵션 이름"
+                  value={option.label}
+                  onChange={(e) => patchRecipe({
+                    options: (recipe.options ?? []).map((row) => (row.id === option.id ? { ...row, label: e.target.value } : row)),
+                  })}
+                />
+                <button
+                  type="button"
+                  className="text-xs text-red-700"
+                  onClick={() => patchRecipe({
+                    options: (recipe.options ?? []).filter((row) => row.id !== option.id),
+                    lines: recipe.lines.map((line) => (line.optionId === option.id ? { ...line, optionId: undefined } : line)),
+                  })}
+                >
+                  옵션 삭제
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-sm border border-slate-300 rounded-lg px-3 py-1.5"
+              onClick={() => patchRecipe({ options: [...(recipe.options ?? []), { id: newCostId("opt"), label: "새 옵션" }] })}
+            >
+              옵션 추가
+            </button>
+            <p className="text-xs text-slate-500">예: 단면·양면, 개별 OPP 포장, 선물 포장, 추가 디자인. 옵션에 연결한 줄만 선택했을 때 계산됩니다. 양면이 자동으로 두 배가 되지는 않습니다.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="text-xs text-slate-600"
+              onClick={() => moveRecipe(library, setLibrary, recipe.productId, -1)}
+            >
+              그룹 안에서 위로
+            </button>
+            <button
+              type="button"
+              className="text-xs text-slate-600"
+              onClick={() => moveRecipe(library, setLibrary, recipe.productId, 1)}
+            >
+              그룹 안에서 아래로
+            </button>
+          </div>
           <RecipeLines library={library} recipe={recipe} patchRecipe={patchRecipe} />
           <div className="flex flex-wrap gap-2">
             <AddLine
@@ -914,11 +1229,34 @@ function ProductsPanel({
             />
             나중에 고객 화면에도 이 품목을 준비
           </label>
-          <p className="text-xs text-slate-500">지금 고객 화면의 8개 품목 가격은 이 체크와 상관없이 유지됩니다. 수량별 견적은 4. 견적 계산에서 봅니다.</p>
+          <p className="text-xs text-slate-500">지금 고객 화면의 8개 품목 가격은 이 체크와 상관없이 유지됩니다. 수량별 견적은 4. 견적 작성에서 봅니다.</p>
         </article>
       )}
     </section>
   );
+}
+
+function moveRecipe(
+  library: CostLibrary,
+  setLibrary: (next: CostLibrary) => void,
+  productId: string,
+  direction: -1 | 1
+) {
+  const current = library.recipes.find((row) => row.productId === productId);
+  if (!current) return;
+  const siblings = library.recipes
+    .filter((row) => row.groupId === current.groupId)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.label.localeCompare(b.label, "ko"));
+  const index = siblings.findIndex((row) => row.productId === productId);
+  const neighbor = siblings[index + direction];
+  if (!neighbor) return;
+  const order = new Map(siblings.map((row, position) => [row.productId, position]));
+  order.set(current.productId, index + direction);
+  order.set(neighbor.productId, index);
+  setLibrary({
+    ...library,
+    recipes: library.recipes.map((row) => (order.has(row.productId) ? { ...row, sortOrder: order.get(row.productId) } : row)),
+  });
 }
 
 function QuoteDesk({
@@ -929,23 +1267,51 @@ function QuoteDesk({
   setLibrary: (next: CostLibrary) => void;
 }) {
   const [productId, setProductId] = useState(library.recipes[0]?.productId ?? "");
+  const [query, setQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
+  const [optionIds, setOptionIds] = useState<string[]>([]);
   const recipe = library.recipes.find((row) => row.productId === productId);
+  const visible = library.recipes.filter((row) => (groupFilter ? row.groupId === groupFilter : true) && matchesQuery(row.label, "", query));
+  const shownLines = recipe?.lines.filter((line) => !line.optionId || optionIds.includes(line.optionId)) ?? [];
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-slate-800">4. 수량별 견적</h2>
-      <p className="text-sm text-slate-600">품목과 규격을 고르면 1개, 10개, 50개, 100개, 500개를 같이 계산합니다. 추천가는 고객 화면에 바로 적용되지 않습니다.</p>
+      <h2 className="text-sm font-semibold text-slate-800">4. 견적 작성</h2>
+      <p className="text-sm text-slate-600">그룹이나 검색으로 품목을 고른 뒤 규격, 수량, 옵션만 입력합니다. 고르지 않은 옵션의 재료와 공정은 계산하지 않습니다.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input className={fieldClass} placeholder="품목 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <select className={fieldClass} value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+          <option value="">그룹 전체</option>
+          {(library.groups ?? []).filter((group) => group.active).map((group) => (
+            <option key={group.id} value={group.id}>{group.label}</option>
+          ))}
+        </select>
+      </div>
       <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">
         품목
-        <select className={fieldClass} value={productId} onChange={(e) => setProductId(e.target.value)}>
-          {library.recipes.map((row) => (
+        <select className={fieldClass} value={productId} onChange={(e) => { setProductId(e.target.value); setOptionIds([]); }}>
+          {visible.map((row) => (
             <option key={row.productId} value={row.productId}>{row.label || row.productId}</option>
           ))}
         </select>
       </label>
+      {(recipe?.options ?? []).length > 0 && (
+        <div className="flex flex-wrap gap-3 text-sm text-slate-700">
+          {(recipe?.options ?? []).map((option) => (
+            <label key={option.id} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={optionIds.includes(option.id)}
+                onChange={(e) => setOptionIds((current) => e.target.checked ? [...current, option.id] : current.filter((id) => id !== option.id))}
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      )}
       {recipe && (
         <ul className="text-sm text-slate-600">
-          {recipe.lines.length === 0 && <li>붙인 원자재와 공정이 없습니다.</li>}
-          {recipe.lines.map((line) => (
+          {shownLines.length === 0 && <li>이 조건에 계산할 원자재와 공정이 없습니다.</li>}
+          {shownLines.map((line) => (
             <li key={line.lineId}>
               {(line.kind === "material" ? library.materials : library.processes).find((row) => row.id === line.refId)?.label || line.refId}
               {" · "}
@@ -955,7 +1321,7 @@ function QuoteDesk({
           ))}
         </ul>
       )}
-      {productId && <QuotePanel library={library} setLibrary={setLibrary} productId={productId} />}
+      {productId && <QuotePanel library={library} setLibrary={setLibrary} productId={productId} optionIds={optionIds} />}
     </section>
   );
 }
@@ -964,10 +1330,12 @@ function QuotePanel({
   library,
   setLibrary,
   productId,
+  optionIds,
 }: {
   library: CostLibrary;
   setLibrary: (next: CostLibrary) => void;
   productId: string;
+  optionIds: string[];
 }) {
   const [qty, setQty] = useState(10);
   const [widthMm, setWidthMm] = useState(200);
@@ -987,7 +1355,7 @@ function QuotePanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         library,
-        input: { productId, qty, widthMm, heightMm, gapMm: gapText.trim() === "" ? undefined : Number(gapText) },
+        input: { productId, qty, widthMm, heightMm, gapMm: gapText.trim() === "" ? undefined : Number(gapText), optionIds },
         qtys: qtyText.split(",").map((item) => Number(item.trim())).filter((item) => Number.isFinite(item) && item >= 1),
       }),
     });
@@ -1017,7 +1385,7 @@ function QuotePanel({
     const res = await fetch("/api/admin/pricing-approval", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirm: true, input: { productId, qty, widthMm, heightMm, gapMm: gapText.trim() === "" ? undefined : Number(gapText) } }),
+      body: JSON.stringify({ confirm: true, input: { productId, qty, widthMm, heightMm, gapMm: gapText.trim() === "" ? undefined : Number(gapText), optionIds } }),
     });
     const data = (await res.json().catch(() => ({}))) as { library?: CostLibrary; error?: string };
     if (!res.ok || !data.library) {
@@ -1041,7 +1409,7 @@ function QuotePanel({
       body: JSON.stringify({
         entry: {
           productId,
-          input: { qty, widthMm, heightMm, gapMm: gapText.trim() === "" ? undefined : Number(gapText) },
+          input: { qty, widthMm, heightMm, gapMm: gapText.trim() === "" ? undefined : Number(gapText), optionIds },
           salePolicyRevision: saleRevision ?? 0,
           costLibraryRevision: result.costLibraryRevision,
           marginPolicyRevision: 0,
@@ -1131,6 +1499,9 @@ function QuotePanel({
             <p>원자재 원가 {kindSum(result, "material")}</p>
             <p>제작 공정 원가 {kindSum(result, "process")}</p>
             <p className="font-medium">총제작원가 {result.missing.length > 0 ? "원가 미등록" : won(result.supplyCost)}</p>
+            {result.missing.length === 0 && result.supplyCost != null && qty > 0 && (
+              <p>개당 제작원가 {won(Math.round(result.supplyCost / qty))}</p>
+            )}
             {result.missing.length > 0 && <p className="text-red-700">빠진 항목: {result.missing.join(", ")}</p>}
             {result.warnings.map((warning) => <p key={warning} className="text-amber-800">{warning}</p>)}
           </section>
@@ -1151,6 +1522,7 @@ function QuotePanel({
           <section className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
             <h3 className="font-semibold text-amber-950">내부 추천가격</h3>
             <p className="text-xs text-amber-900">고객 화면 가격이 아닙니다. 총제작원가 ÷ (1 - 목표 이익률)로 계산하고, 추천 공급가는 10원 단위로 올립니다. 고객 판매가는 바꾸지 않습니다.</p>
+            {result.laborUnpriced && <p className="text-red-800">작업비가 빠져 있어 이 추천 공급가는 그대로 믿지 않습니다.</p>}
             <p className="text-xs text-amber-900">{result.profitBasis === "total-cost" ? "고정 작업비가 포함되어 있어 총제작원가 기준 이익률입니다. 공헌이익률이 아닙니다." : "고정 작업비가 없어 이 이익률은 공헌이익률과 같습니다."}</p>
             {result.missing.length > 0 ? (
               <p>원가가 빠져 추천가격을 만들지 않습니다.</p>
@@ -1226,7 +1598,7 @@ function HistoryPanel({ library }: { library: CostLibrary }) {
   }, []);
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-slate-800">견적 이력</h2>
+      <h2 className="text-sm font-semibold text-slate-800">5. 견적 기록</h2>
       {note && <p className="text-sm text-slate-600">{note}</p>}
       {entries.length === 0 && <p className="text-sm text-slate-500">남긴 견적이 없습니다. 품목 조립에서 견적을 계산한 뒤 기록하면 여기에 남습니다.</p>}
       <ul className="space-y-2">
