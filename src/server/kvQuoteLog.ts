@@ -18,6 +18,8 @@ export interface QuoteHistoryEntry {
   staffName?: string;
   customerName?: string;
   adjustmentReason?: string;
+  /** 추천가와 다른 공급가를 이 조건에서 다시 확인했는지. */
+  priceConfirmed?: boolean;
   internal?: {
     supplyCost?: number;
     minimumSupplyPrice?: number;

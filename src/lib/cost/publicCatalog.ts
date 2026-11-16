@@ -1,4 +1,4 @@
-import { recipeIssues } from "./recipeHealth";
+import { quoteStage, quoteStageLabel } from "./recipeHealth";
 import type { CostLibrary, LegacyQuoteId, ProductRecipe } from "./types";
 
 export interface PublicMenuItem {
@@ -53,7 +53,7 @@ export function isListedOnCustomerHome(recipe: ProductRecipe): boolean {
 function toMenuItem(library: Pick<CostLibrary, "materials" | "processes" | "recipes">, recipe: ProductRecipe): PublicMenuItem | null {
   if (!isListedOnCustomerHome(recipe)) return null;
   const description = recipe.description?.trim();
-  const issues = recipe.legacyQuoteId ? [] : recipeIssues(library, recipe);
+  const stage = recipe.legacyQuoteId ? "ready" : quoteStage(library, recipe);
   const quoteId = recipe.legacyQuoteId ?? recipe.productId;
   return {
     id: recipe.productId,
@@ -61,8 +61,8 @@ function toMenuItem(library: Pick<CostLibrary, "materials" | "processes" | "reci
     description: description || undefined,
     legacyQuoteId: recipe.legacyQuoteId,
     href: `/quote?product=${encodeURIComponent(quoteId)}`,
-    ready: issues.length === 0,
-    note: issues[0],
+    ready: stage === "ready",
+    note: stage === "ready" ? undefined : quoteStageLabel(stage === "hidden" ? "incomplete" : stage),
     favorite: recipe.favorite === true,
   };
 }

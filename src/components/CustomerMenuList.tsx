@@ -18,7 +18,7 @@ function ItemLink({ item }: { item: PublicMenuItem }) {
   return (
     <Link href={item.href} className={productBtnClass} onClick={() => rememberRecent(item.id)}>
       <span>{item.label}</span>
-      {item.note ? <span className="mt-1 text-xs font-normal text-amber-700">설정 필요</span> : null}
+      {item.note ? <span className="mt-1 text-xs font-normal text-amber-700">{item.note}</span> : null}
       {item.description ? <span className="mt-1 text-xs font-normal text-slate-500">{item.description}</span> : null}
     </Link>
   );

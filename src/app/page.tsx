@@ -124,8 +124,9 @@ export default function Home() {
       <h1 className="text-2xl font-bold text-slate-800 mb-1 text-center">부부피오피 내부 견적</h1>
       <p className="text-sm text-slate-500 mb-1 text-center max-w-md">품목을 고르고 규격과 수량을 입력하면 같은 원가로 견적을 냅니다.</p>
       <div className="mb-4 flex flex-wrap justify-center gap-2 text-sm">
-        <a className="rounded-full bg-slate-800 px-3 py-1.5 text-white" href="/">견적 계산</a>
-        <a className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-slate-700" href="/admin">견적 기록 · 관리자 설정</a>
+        <a className="rounded-full bg-blue-700 px-3 py-1.5 text-white" href="/">견적 계산</a>
+        <a className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-slate-700" href="/quotes">견적 기록</a>
+        <a className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-slate-700" href="/admin">관리자 설정</a>
       </div>
       <p className="text-xs text-slate-500 mb-4 text-center max-w-md">{configNote}</p>
 

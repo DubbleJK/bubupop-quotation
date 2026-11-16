@@ -78,5 +78,5 @@ export function describeQuoteSource(result: Extract<QuoteConfigResolution, { rea
   if (result.source === "browser") {
     return `서버에 저장된 설정이 없습니다. 이 브라우저에 남아 있는 설정을 사용합니다. ${version}${when}`;
   }
-  return "서버에 저장된 설정이 없습니다. 코드 기본값을 사용합니다.";
+  return "기존 8개 품목의 판매단가는 코드 기본값입니다. 원가 기반 품목은 서버에 저장된 원가를 사용합니다.";
 }
