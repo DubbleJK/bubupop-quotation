@@ -30,7 +30,9 @@ export function recipeIssues(library: Pick<CostLibrary, "materials" | "processes
     return shares && other.lines.some((line) => line.kind === "process") && recipe.lines.filter((line) => line.kind === "process").length < other.lines.filter((line) => line.kind === "process").length;
   });
   if (richer) {
-    issues.push(`${richer.label}과 같은 원자재를 쓰지만 연결된 공정이 더 적습니다. 구형 설정일 수 있어 삭제하거나 합치지 않았습니다.`);
+    const last = richer.label.charCodeAt(richer.label.length - 1);
+    const batchim = last >= 0xac00 && last <= 0xd7a3 && (last - 0xac00) % 28 !== 0;
+    issues.push(`${richer.label}${batchim ? "과" : "와"} 같은 원자재를 쓰지만 연결된 공정이 더 적습니다. 구형 설정일 수 있어 삭제하거나 합치지 않았습니다.`);
   }
   return issues;
 }
