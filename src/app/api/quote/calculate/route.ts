@@ -5,6 +5,8 @@ import { seoulToday } from "@/lib/cost/library";
 import { simulatePricing } from "@/lib/cost/pricing";
 import { quoteStage, quoteStageLabel, recipeIssues } from "@/lib/cost/recipeHealth";
 import type { SimulationInput } from "@/lib/cost/types";
+import { quoteCalculationForRole } from "@/lib/cost/quoteView";
+import { ADMIN_COOKIE_NAME, readSession } from "@/server/adminSession";
 import { readKvConfig } from "@/server/kvConfig";
 import { readCostLibrary } from "@/server/kvCostLibrary";
 import { requireQuoteAccess } from "@/server/requireAdmin";
@@ -13,6 +15,7 @@ import { requireQuoteAccess } from "@/server/requireAdmin";
 export async function POST(request: NextRequest) {
   const denied = requireQuoteAccess(request);
   if (denied) return denied;
+  const role = readSession(request.cookies.get(ADMIN_COOKIE_NAME)?.value)?.role === "admin" ? "admin" : "staff";
   let input: SimulationInput | undefined;
   try {
     const body = (await request.json()) as { input?: SimulationInput };
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
   const needsSize = [...usages].some((usage) => usage === "per-meter-layout" || usage === "per-sheet-imposition" || usage === "per-m2");
   const result = simulatePricing(stored.library, config, input, seoulToday());
   const stage = quoteStage(stored.library, recipe);
-  return NextResponse.json({
+  return NextResponse.json(quoteCalculationForRole({
     label: recipe.label,
     stage,
     stageLabel: quoteStageLabel(stage),
@@ -51,5 +54,5 @@ export async function POST(request: NextRequest) {
       lines: result.lines.map((line) => ({ name: line.name, kind: line.kind, supplyCost: line.supplyCost, usageQty: line.usageQty, unitLabel: line.unitLabel, reason: line.reason, usageNote: line.usageNote })),
       costLibraryRevision: result.costLibraryRevision,
     },
-  });
+  }, role));
 }

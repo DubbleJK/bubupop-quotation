@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { QuoteHeader } from "@/components/QuoteHeader";
 import { formatSeoulMinute } from "@/lib/time/seoul";
 
 interface Entry {
@@ -28,12 +29,21 @@ function won(value?: number): string {
 
 export default function QuotesPage() {
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [role, setRole] = useState<"admin" | "staff" | null>(null);
   const [pin, setPin] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [recalc, setRecalc] = useState<{ id: string; state: "loading" | "done" | "error"; cost?: number; recommended?: number; margin?: number; message?: string } | null>(null);
 
   const load = async () => {
+    const session = await fetch("/api/admin/session");
+    if (!session.ok) {
+      setRole(null);
+      setAuthed(false);
+      return;
+    }
+    const sessionBody = (await session.json()) as { role?: string };
+    setRole(sessionBody.role === "staff" ? "staff" : "admin");
     const res = await fetch("/api/admin/quote-log");
     if (res.status === 401) {
       setAuthed(false);
@@ -77,34 +87,36 @@ export default function QuotesPage() {
       }),
     });
     const data = (await res.json()) as { result?: { supplyCost?: number; recommendedSupplyPrice?: number } };
-    if (!res.ok || data.result?.supplyCost == null || data.result.recommendedSupplyPrice == null) {
+    if (!res.ok || data.result?.recommendedSupplyPrice == null || (role === "admin" && data.result.supplyCost == null)) {
       setRecalc({ id: entry.id, state: "error", message: "지금 원가로는 다시 계산하지 못했습니다. 저장된 금액은 그대로입니다." });
       return;
     }
-    const margin = data.result.recommendedSupplyPrice > 0 ? (data.result.recommendedSupplyPrice - data.result.supplyCost) / data.result.recommendedSupplyPrice : undefined;
-    setRecalc({ id: entry.id, state: "done", cost: data.result.supplyCost, recommended: data.result.recommendedSupplyPrice, margin });
+    const recommended = data.result.recommendedSupplyPrice;
+    const cost = data.result.supplyCost;
+    const margin = cost != null && recommended > 0 ? (recommended - cost) / recommended : undefined;
+    setRecalc({ id: entry.id, state: "done", cost, recommended, margin });
   };
 
   if (authed === null) return <main className="min-h-screen bg-slate-100 p-6 text-slate-600">기록을 확인하는 중입니다.</main>;
   if (!authed) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6">
+      <main className="min-h-screen bg-slate-100">
+        <QuoteHeader current="quotes" role={null} />
+        <div className="p-6">
         <form onSubmit={login} className="mx-auto max-w-sm rounded-2xl bg-white p-6">
           <h1 className="text-lg font-semibold text-slate-900">견적 기록</h1>
           <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} className="mt-3 w-full rounded-xl border px-3 py-3" placeholder="PIN" />
           <button className="mt-3 w-full rounded-xl bg-blue-700 py-3 text-white">로그인</button>
         </form>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 md:p-8">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-4 flex gap-2 text-sm">
-          <a className="rounded-full border bg-white px-3 py-1.5" href="/">견적 계산</a>
-          <a className="rounded-full bg-blue-700 px-3 py-1.5 text-white" href="/quotes">견적 기록</a>
-        </div>
+    <main className="min-h-screen bg-slate-100">
+      <QuoteHeader current="quotes" role={role} />
+      <div className="mx-auto max-w-3xl p-4 md:p-8">
         <h1 className="text-2xl font-semibold text-slate-900">견적 기록</h1>
         <p className="mt-1 text-sm text-slate-500">저장된 금액은 당시 계산입니다. 다시 계산해도 원본은 바뀌지 않습니다.</p>
         <ul className="mt-4 space-y-3">
@@ -112,7 +124,7 @@ export default function QuotesPage() {
             <li key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-4">
               <button type="button" className="w-full text-left" onClick={() => setOpenId(openId === entry.id ? null : entry.id)}>
                 <p className="font-medium text-slate-900">{String(entry.input?.label ?? entry.productId)}</p>
-                <p className="text-sm text-slate-500">{formatSeoulMinute(entry.createdAt)} · 공급가 {won(entry.presentedSupplyPrice)} · 총액 {won(entry.presentedTotal)}</p>
+                <p className="text-sm text-slate-500">{formatSeoulMinute(entry.createdAt)} · 공급가 (VAT 별도) {won(entry.presentedSupplyPrice)} · 총액 {won(entry.presentedTotal)}</p>
               </button>
               {openId === entry.id && (
                 <dl className="mt-3 grid grid-cols-1 gap-1 text-sm text-slate-700 sm:grid-cols-2">
@@ -122,12 +134,13 @@ export default function QuotesPage() {
                   <div>규격 {entry.input?.widthMm ?? "—"}×{entry.input?.heightMm ?? "—"}mm</div>
                   <div>수량 {entry.input?.qty ?? "—"}</div>
                   <div className="sm:col-span-2 mt-2 font-medium text-slate-900">당시 견적</div>
-                  <div>당시 제작원가 {won(entry.internal?.supplyCost)}</div>
-                  <div>당시 추천 공급가 {won(entry.internal?.recommendedSupplyPrice ?? entry.internal?.targetSupplyPrice)}</div>
-                  <div>실제 제시 공급가 {won(entry.presentedSupplyPrice)}</div>
+                  <div>실제 제시 공급가 (VAT 별도) {won(entry.presentedSupplyPrice)}</div>
+                  <div>부가세 {won(entry.presentedVat)}</div>
                   <div>부가세 포함 총액 {won(entry.presentedTotal)}</div>
+                  {role === "admin" && <div>당시 제작원가 {won(entry.internal?.supplyCost)}</div>}
+                  {role === "admin" && <div>당시 추천 공급가 {won(entry.internal?.recommendedSupplyPrice ?? entry.internal?.targetSupplyPrice)}</div>}
                   <div className="sm:col-span-2">조정 사유 {entry.adjustmentReason || "기록 없음"}</div>
-                  <button type="button" className="mt-2 text-left font-medium text-blue-700" onClick={() => void requote(entry)}>지금 원가로 다시 계산</button>
+                  {role === "admin" && <button type="button" className="mt-2 text-left font-medium text-blue-700" onClick={() => void requote(entry)}>지금 원가로 다시 계산</button>}
                   {recalc?.id === entry.id && (
                     <div className="sm:col-span-2 mt-2 rounded-xl bg-slate-50 p-3">
                       <p className="font-medium text-slate-900">현재 원가로 재계산</p>

@@ -274,11 +274,11 @@ export default function AdminPage() {
           className="text-slate-600 hover:text-slate-800 text-sm"
           onClick={(event) => {
             if (!costDraft.dirty) return;
-            const leave = window.confirm("서버에 저장하지 않은 원가가 있습니다. 첫 화면으로 이동할까요?");
+            const leave = window.confirm("서버에 저장하지 않은 원가가 있습니다. 견적 화면으로 이동할까요?");
             if (!leave) event.preventDefault();
           }}
         >
-          ← 첫 화면
+          ← 견적 화면
         </Link>
         <h1 className="text-xl font-semibold text-slate-800">관리자</h1>
         <div className="hidden">

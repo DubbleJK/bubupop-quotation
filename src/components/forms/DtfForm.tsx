@@ -9,6 +9,7 @@ export interface DtfFormProps {
   settings: Settings;
   onReset: () => void;
   onSummaryChange?: (payload: SummaryPayload) => void;
+  showCostReference?: boolean;
 }
 
 interface DtfItemRow {
@@ -27,7 +28,7 @@ function newItem(): DtfItemRow {
   };
 }
 
-export function DtfForm({ settings, onReset, onSummaryChange }: DtfFormProps) {
+export function DtfForm({ settings, onReset, onSummaryChange, showCostReference = false }: DtfFormProps) {
   const [items, setItems] = useState<DtfItemRow[]>(() => [newItem()]);
 
   const addItem = useCallback(() => {
@@ -79,14 +80,14 @@ export function DtfForm({ settings, onReset, onSummaryChange }: DtfFormProps) {
         ? [
             { label: "항목 수", value: `${totalResult.count}개 디자인` },
             { label: "총 사용 길이", value: `${totalResult.lengthM.toFixed(2)}m` },
-            { label: "공급가", value: totalResult.supplyPrice },
-            { label: "VAT(10%)", value: totalResult.vatAndTotal.vat },
-            { label: "총액", value: totalResult.vatAndTotal.total },
-            { label: "참고 원가", value: totalResult.costReference },
+            { label: "공급가 (VAT 별도)", value: totalResult.supplyPrice },
+            { label: "부가세", value: totalResult.vatAndTotal.vat },
+            { label: "총액 (VAT 포함)", value: totalResult.vatAndTotal.total },
+            ...(showCostReference ? [{ label: "참고 원가", value: totalResult.costReference }] : []),
             { label: "예상 인쇄 시간", value: `${totalResult.estimatedMinutes}분` },
           ]
         : [],
-    [totalResult]
+    [totalResult, showCostReference]
   );
 
   useEffect(() => {
