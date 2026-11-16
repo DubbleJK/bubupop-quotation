@@ -617,7 +617,10 @@ export interface QtyCompareRow {
   supplyCost?: number;
   recommendedSupply?: number;
   unitSupply?: number;
+  /** 최종 추천 공급가 기준 예상 이익률. 최소 판매금액이 적용되면 목표 이익률과 달라진다. */
   marginRate?: number;
+  /** 목표 이익률 기준 공급가의 이익률. */
+  targetMarginRate?: number;
   status: "ok" | "missing" | "inversion" | "review" | "low-margin";
   note?: string;
 }
@@ -634,13 +637,15 @@ export function compareQuantities(
   const rows: QtyCompareRow[] = ordered.map((qty) => {
     const result = simulatePricing(library, config, { ...input, qty }, asOf);
     const recommended = result.recommendedSupplyPrice ?? result.target?.supplyPrice;
+    const cost = result.supplyCost;
     const status: QtyCompareRow["status"] = result.missing.length > 0 ? "missing" : result.capacityWarning ? "review" : result.belowMinimum ? "low-margin" : "ok";
     return {
       qty,
-      supplyCost: result.supplyCost,
+      supplyCost: cost,
       recommendedSupply: recommended,
       unitSupply: finite(recommended) ? Math.round(recommended / qty) : undefined,
-      marginRate: result.target?.marginRate,
+      marginRate: finite(recommended) && recommended > 0 && finite(cost) ? (recommended - cost) / recommended : undefined,
+      targetMarginRate: result.target?.marginRate,
       status,
       note: result.missing[0] ?? result.capacityWarning ?? (result.belowMinimum ? "현재 판매가의 이익률이 최소 확보 이익률보다 낮습니다. 고객 판매가는 바꾸지 않았습니다." : undefined),
     };

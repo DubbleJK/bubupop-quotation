@@ -49,6 +49,7 @@ export function CustomerMenuList({ catalog }: { catalog: PublicCatalog }) {
       {sections.map((section) => (
         <section key={section.id}>
           <h3 className="mb-2 text-sm font-semibold text-slate-800">{section.label}</h3>
+          {section.id === "ungrouped" && <p className="mb-2 text-xs text-slate-500">그룹을 지정하지 않은 품목입니다. 그룹은 여기서 바꾸지 않습니다.</p>}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {section.products.map((item) => <ItemLink key={item.id} item={item} />)}
           </div>

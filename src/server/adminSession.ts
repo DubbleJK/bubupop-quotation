@@ -12,32 +12,72 @@ export function sessionSecret(): string | null {
   return DEV_FALLBACK_SECRET;
 }
 
-export function signAdminSession(now = Date.now()): string | null {
+export type SessionRole = "admin" | "staff";
+
+export interface SessionClaims {
+  role: SessionRole;
+}
+
+/** 역할이 없는 기존 세션은 관리자로 유지한다. 직원 접근을 갑자기 끊지 않기 위해서다. */
+export function signSession(role: SessionRole, now = Date.now()): string | null {
   const secret = sessionSecret();
   if (!secret) return null;
   const exp = now + MAX_AGE_MS;
   const nonce = randomBytes(16).toString("hex");
-  const payload = `${exp}.${nonce}`;
+  const payload = `${exp}.${nonce}.${role}`;
   const sig = createHmac("sha256", secret).update(payload).digest("hex");
   return `${payload}.${sig}`;
 }
 
-export function verifyAdminSession(token: string | undefined, now = Date.now()): boolean {
-  if (!token) return false;
+export function signAdminSession(now = Date.now()): string | null {
+  return signSession("admin", now);
+}
+
+export function readSession(token: string | undefined, now = Date.now()): SessionClaims | null {
+  if (!token) return null;
   const secret = sessionSecret();
-  if (!secret) return false;
+  if (!secret) return null;
   const parts = token.split(".");
-  if (parts.length !== 3) return false;
-  const [expRaw, nonce, sig] = parts;
-  if (!expRaw || !nonce || !sig) return false;
-  const exp = Number(expRaw);
-  if (!Number.isFinite(exp) || exp < now) return false;
-  const payload = `${expRaw}.${nonce}`;
+  let payload = "";
+  let sig = "";
+  let role: SessionRole = "admin";
+  if (parts.length === 3) {
+    const [expRaw, nonce, signature] = parts;
+    if (!expRaw || !nonce || !signature) return null;
+    payload = `${expRaw}.${nonce}`;
+    sig = signature;
+    role = "admin";
+    if (!fresh(expRaw, now)) return null;
+  } else if (parts.length === 4) {
+    const [expRaw, nonce, rawRole, signature] = parts;
+    if (!expRaw || !nonce || !signature) return null;
+    if (rawRole !== "admin" && rawRole !== "staff") return null;
+    payload = `${expRaw}.${nonce}.${rawRole}`;
+    sig = signature;
+    role = rawRole;
+    if (!fresh(expRaw, now)) return null;
+  } else {
+    return null;
+  }
   const expected = createHmac("sha256", secret).update(payload).digest("hex");
   const actualBuf = Buffer.from(sig);
   const expectedBuf = Buffer.from(expected);
-  if (actualBuf.length !== expectedBuf.length) return false;
-  return timingSafeEqual(actualBuf, expectedBuf);
+  if (actualBuf.length !== expectedBuf.length) return null;
+  if (!timingSafeEqual(actualBuf, expectedBuf)) return null;
+  return { role };
+}
+
+function fresh(expRaw: string, now: number): boolean {
+  const exp = Number(expRaw);
+  return Number.isFinite(exp) && exp >= now;
+}
+
+export function verifyAdminSession(token: string | undefined, now = Date.now()): boolean {
+  return readSession(token, now)?.role === "admin";
+}
+
+export function verifyQuoteSession(token: string | undefined, now = Date.now()): boolean {
+  return readSession(token, now) != null;
 }
 
 export function pinsMatch(left: string, right: string): boolean {

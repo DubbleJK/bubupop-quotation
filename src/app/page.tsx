@@ -45,12 +45,21 @@ export default function Home() {
   const router = useRouter();
   const [config, setConfig] = useState<AppConfig>(() => configProvider.getInitialConfig());
   const [configNote, setConfigNote] = useState("가격 설정을 확인하는 중입니다.");
+  const [role, setRole] = useState<"admin" | "staff" | null>(null);
   const [adminPin, setAdminPin] = useState("");
   const [adminError, setAdminError] = useState("");
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
   const [catalog, setCatalog] = useState<PublicCatalog | null>(null);
   const [query, setQuery] = useState("");
   const [groupId, setGroupId] = useState("all");
+
+  useEffect(() => {
+    void fetch("/api/admin/session").then(async (res) => {
+      if (!res.ok) return;
+      const data = (await res.json()) as { role?: string };
+      setRole(data.role === "staff" ? "staff" : "admin");
+    }).catch(() => setRole(null));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,10 +102,16 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin: adminPin }),
       });
+      const data = (await res.json().catch(() => ({}))) as { role?: string };
       if (!res.ok) {
         setAdminError(
           res.status === 503 ? "서버 세션 설정을 확인하지 못했습니다." : "PIN이 올바르지 않습니다."
         );
+        return;
+      }
+      if (data.role === "staff") {
+        setRole("staff");
+        setAdminError("이 PIN은 견적 계산과 저장만 할 수 있습니다. 원가 변경은 관리자 PIN이 필요합니다.");
         return;
       }
       router.push("/admin");
@@ -126,7 +141,7 @@ export default function Home() {
       <div className="mb-4 flex flex-wrap justify-center gap-2 text-sm">
         <a className="rounded-full bg-blue-700 px-3 py-1.5 text-white" href="/">견적 계산</a>
         <a className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-slate-700" href="/quotes">견적 기록</a>
-        <a className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-slate-700" href="/admin">관리자 설정</a>
+        {role !== "staff" && <a className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-slate-700" href="/admin">관리자 설정</a>}
       </div>
       <p className="text-xs text-slate-500 mb-4 text-center max-w-md">{configNote}</p>
 
@@ -144,7 +159,7 @@ export default function Home() {
           {catalog ? <CustomerMenuList catalog={filterCatalog(catalog, query, groupId)} /> : <p className="text-sm text-slate-500">품목을 불러오는 중입니다.</p>}
         </section>
 
-        <section className="bg-white border border-slate-200 rounded-xl p-4">
+        {role !== "staff" && <section className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-slate-700">관리자 설정</h2>
           <p className="text-xs text-slate-500 mt-1 mb-4">원자재, 공정, 최소 판매금액은 관리자 로그인 후 바꿉니다.</p>
 
@@ -192,7 +207,7 @@ export default function Home() {
               </div>
             </form>
           )}
-        </section>
+        </section>}
       </div>
     </div>
   );
