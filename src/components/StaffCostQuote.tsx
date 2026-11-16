@@ -46,6 +46,7 @@ export function StaffCostQuote({ productId, onProductChange }: { productId: stri
   const [loginError, setLoginError] = useState("");
   const [catalog, setCatalog] = useState<PublicCatalog | null>(null);
   const [query, setQuery] = useState("");
+  const [pickedGroup, setPickedGroup] = useState<string | null>(null);
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [qty, setQty] = useState("1");
@@ -159,10 +160,15 @@ export function StaffCostQuote({ productId, onProductChange }: { productId: stri
   const canSave = inputsReady && (payload?.stage === "ready" || payload?.stage === "review") && priceOk && result?.missing.length === 0;
   const vat = Number.isFinite(offeredPrice) ? calcVatAndTotal(offeredPrice, result?.vatRate ?? 0.1) : undefined;
   const margin = result?.supplyCost != null && offeredPrice > 0 ? (offeredPrice - result.supplyCost) / offeredPrice : undefined;
-  const products = [
-    ...(catalog?.groups.flatMap((group) => group.products.map((item) => ({ ...item, group: group.label }))) ?? []),
-    ...(catalog?.ungrouped.map((item) => ({ ...item, group: "그룹 없음" })) ?? []),
-  ].filter((item) => !item.legacyQuoteId && (query.trim() === "" || item.label.includes(query.trim())));
+  const text = query.trim();
+  const sections = [
+    ...(catalog?.groups.map((group) => ({ id: group.id, label: group.label, products: group.products.filter((item) => !item.legacyQuoteId) })) ?? []),
+    { id: "ungrouped", label: "그룹 없음", products: (catalog?.ungrouped ?? []).filter((item) => !item.legacyQuoteId) },
+  ].filter((section) => section.products.length > 0);
+  const productGroup = sections.find((section) => section.products.some((item) => item.id === productId))?.id ?? null;
+  const visibleSections = text === "" ? sections : sections.filter((section) => section.label.includes(text) || section.products.some((item) => item.label.includes(text) || (item.description ?? "").includes(text)));
+  const activeGroup = visibleSections.some((section) => section.id === (pickedGroup ?? productGroup)) ? (pickedGroup ?? productGroup) : visibleSections[0]?.id ?? null;
+  const activeProducts = (visibleSections.find((section) => section.id === activeGroup)?.products ?? []).filter((item) => text === "" || item.label.includes(text) || (item.description ?? "").includes(text) || visibleSections.find((section) => section.id === activeGroup)?.label.includes(text));
 
   const save = async () => {
     if (!result || !canSave) return;
@@ -204,18 +210,37 @@ export function StaffCostQuote({ productId, onProductChange }: { productId: stri
     <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">견적 입력</h2>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <input className="rounded-xl border border-slate-300 px-3 py-3 text-base" placeholder="상품명 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <select className="rounded-xl border border-slate-300 px-3 py-3 text-base" value={productId} onChange={(e) => chooseProduct(e.target.value)}>
-            {products.map((item) => <option key={item.id} value={item.id}>{item.group} · {item.label}{item.description ? ` · ${item.description}` : ""}</option>)}
-            {products.every((item) => item.id !== productId) && <option value={productId}>{payload?.label ?? productId}</option>}
-          </select>
+        <input className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-3 text-base" placeholder="상품명 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <div className="mt-3 flex flex-wrap gap-2">
+          {visibleSections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              aria-pressed={section.id === activeGroup}
+              className={`rounded-full px-4 py-2 text-sm ${section.id === activeGroup ? "bg-slate-900 text-white" : "border border-slate-300 bg-white text-slate-700"}`}
+              onClick={() => setPickedGroup(section.id)}
+            >
+              {section.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 space-y-1" role="radiogroup" aria-label="판매 품목">
+          {activeProducts.map((item) => (
+            <label key={item.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 py-2">
+              <input type="radio" name="staff-quote-product" className="h-4 w-4" checked={item.id === productId} onChange={() => { setPickedGroup(activeGroup); chooseProduct(item.id); }} />
+              <span>
+                <span className="font-medium text-slate-900">{item.label}</span>
+                {item.note ? <span className="ml-2 text-xs text-amber-700">{item.note}</span> : null}
+              </span>
+            </label>
+          ))}
+          {activeProducts.length === 0 && <p className="text-sm text-slate-500">이 그룹에서 찾는 품목이 없습니다.</p>}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          {needsSize && <label className="text-sm font-medium text-slate-700">가로(mm)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg" value={width} onChange={(e) => { setWidth(e.target.value); setConfirmedKey(""); }} /></label>}
-          {needsSize && <label className="text-sm font-medium text-slate-700">세로(mm)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg" value={height} onChange={(e) => { setHeight(e.target.value); setConfirmedKey(""); }} /></label>}
+          {needsSize && <label className="text-sm font-medium text-slate-700">가로 (mm)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg" value={width} onChange={(e) => { setWidth(e.target.value); setConfirmedKey(""); }} /></label>}
+          {needsSize && <label className="text-sm font-medium text-slate-700">세로 (mm)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg" value={height} onChange={(e) => { setHeight(e.target.value); setConfirmedKey(""); }} /></label>}
           <label className="text-sm font-medium text-slate-700">수량<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg" value={qty} onChange={(e) => { setQty(e.target.value); setConfirmedKey(""); }} /></label>
-          {payload?.fields.gap !== false && <label className="text-sm font-medium text-slate-700">간격(mm)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg" value={gap} onChange={(e) => { setGap(e.target.value); setConfirmedKey(""); }} /></label>}
+          {payload?.fields.gap !== false && <label className="text-sm font-medium text-slate-700">배치 간격 (mm)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg" value={gap} onChange={(e) => { setGap(e.target.value); setConfirmedKey(""); }} /></label>}
         </div>
         {!inputsReady && <p className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">견적을 계산하려면 가로·세로와 수량을 입력하세요.</p>}
         {payload?.stage === "review" && <p className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-900">현재 출력 공정비는 임시 기준입니다. 주문 기본 작업비 확인이 필요합니다.</p>}
