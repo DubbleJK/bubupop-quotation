@@ -2,15 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFileConfig } from "@/lib/config/fileConfig";
 import { readConfigMeta } from "@/lib/config/configMeta";
 import { readKvConfig } from "@/server/kvConfig";
-import { ADMIN_COOKIE_NAME, verifyAdminSession } from "@/server/adminSession";
+import { requireAdmin } from "@/server/requireAdmin";
 import { defaultAdminPin } from "@/server/defaultAdminPin";
 
 /** 로그인한 관리자만 인증값을 포함한 설정을 받는다. */
 export async function GET(request: NextRequest) {
-  const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
-  if (!verifyAdminSession(token)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireAdmin(request);
+  if (denied) return denied;
 
   const stored = await readKvConfig();
   if (stored.state === "error") {

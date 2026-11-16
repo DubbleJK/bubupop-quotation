@@ -50,9 +50,15 @@ export function isListedOnCustomerHome(recipe: ProductRecipe): boolean {
   return recipe.customerVisible !== false;
 }
 
+function fallbackDescription(recipe: ProductRecipe): string | undefined {
+  if (recipe.legacyQuoteId === "dtf") return "기존 판매단가로 계산하는 DTF입니다.";
+  if (recipe.label === "DTF출력") return "원가 기반으로 계산하는 DTF 출력입니다.";
+  return undefined;
+}
+
 function toMenuItem(library: Pick<CostLibrary, "materials" | "processes" | "recipes">, recipe: ProductRecipe): PublicMenuItem | null {
   if (!isListedOnCustomerHome(recipe)) return null;
-  const description = recipe.description?.trim();
+  const description = recipe.description?.trim() || fallbackDescription(recipe);
   const stage = recipe.legacyQuoteId ? "ready" : quoteStage(library, recipe);
   const quoteId = recipe.legacyQuoteId ?? recipe.productId;
   return {

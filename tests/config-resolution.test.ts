@@ -4,7 +4,7 @@ import { toPublicConfig, containsLoginPin } from "@/lib/config/publicConfig";
 import { readConfigMeta, withNextRevision } from "@/lib/config/configMeta";
 import { resolveQuoteConfig } from "@/lib/config/resolveQuoteConfig";
 import { kvCredentialsPresent } from "@/server/kvConfig";
-import { pinsMatch, sessionSecret, signAdminSession, verifyAdminSession } from "@/server/adminSession";
+import { pinsMatch, readSession, sessionSecret, signAdminSession, signSession, verifyAdminSession } from "@/server/adminSession";
 import type { AppConfig } from "@/lib/config/types";
 
 const file = getFileConfig();
@@ -141,6 +141,9 @@ describe("관리자 세션", () => {
     expect(token).toBeTruthy();
     expect(verifyAdminSession(token ?? undefined, 1_700_000_000_000)).toBe(true);
     expect(verifyAdminSession("1.2.3", 1_700_000_000_000)).toBe(false);
+    const staff = signSession("staff", 1_700_000_000_000);
+    expect(readSession(staff ?? undefined, 1_700_000_000_000)?.role).toBe("staff");
+    expect(verifyAdminSession(staff ?? undefined, 1_700_000_000_000)).toBe(false);
   });
 
   it("프로덕션에서 세션 비밀이 없으면 세션을 만들지 않는다", () => {

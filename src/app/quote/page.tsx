@@ -139,7 +139,7 @@ export default function QuotePage() {
             onChange={handleProductChange}
           />
           ) : (
-            <StaffCostQuote productId={productId} />
+            <StaffCostQuote productId={productId} onProductChange={handleProductChange} />
           )}
         </div>
         {config.products.some((item) => item.id === productId) && <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

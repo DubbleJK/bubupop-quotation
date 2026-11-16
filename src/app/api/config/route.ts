@@ -4,7 +4,7 @@ import { normalizeConfig } from "@/lib/config/fileConfig";
 import { toPublicConfig } from "@/lib/config/publicConfig";
 import { readConfigMeta, withNextRevision } from "@/lib/config/configMeta";
 import { readKvConfig, writeKvConfig } from "@/server/kvConfig";
-import { ADMIN_COOKIE_NAME, verifyAdminSession } from "@/server/adminSession";
+import { requireAdmin } from "@/server/requireAdmin";
 import { defaultAdminPin } from "@/server/defaultAdminPin";
 
 /** 공개 견적 설정. 인증 비밀값은 포함하지 않는다. */
@@ -21,10 +21,8 @@ export async function GET() {
 
 /** 관리자 세션이 있을 때만 서버에 저장한다. 실패하면 아무 곳에도 쓰지 않는다. */
 export async function POST(request: NextRequest) {
-  const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
-  if (!verifyAdminSession(token)) {
-    return NextResponse.json({ error: "unauthorized", persisted: "none" }, { status: 401 });
-  }
+  const denied = requireAdmin(request);
+  if (denied) return denied;
 
   let config: AppConfig | undefined;
   try {

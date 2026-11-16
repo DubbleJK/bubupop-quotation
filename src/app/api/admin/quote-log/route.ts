@@ -7,7 +7,7 @@ import type { SimulationInput } from "@/lib/cost/types";
 import { readKvConfig } from "@/server/kvConfig";
 import { readCostLibrary } from "@/server/kvCostLibrary";
 import { appendQuoteLog, readQuoteLog, type QuoteHistoryEntry } from "@/server/kvQuoteLog";
-import { requireAdmin } from "@/server/requireAdmin";
+import { requireQuoteAccess } from "@/server/requireAdmin";
 
 function simulationFrom(entry: Omit<QuoteHistoryEntry, "id" | "createdAt">): SimulationInput {
   const input = entry.input ?? {};
@@ -26,7 +26,7 @@ function simulationFrom(entry: Omit<QuoteHistoryEntry, "id" | "createdAt">): Sim
 }
 
 export async function GET(request: NextRequest) {
-  const denied = requireAdmin(request);
+  const denied = requireQuoteAccess(request);
   if (denied) return denied;
   const stored = await readQuoteLog();
   if (stored.state === "error") return NextResponse.json({ error: "log_unreadable" }, { status: 503 });
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const denied = requireAdmin(request);
+  const denied = requireQuoteAccess(request);
   if (denied) return denied;
   let entry: Omit<QuoteHistoryEntry, "id" | "createdAt"> | undefined;
   try {

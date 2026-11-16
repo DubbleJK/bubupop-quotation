@@ -7,11 +7,11 @@ import { quoteStage, quoteStageLabel, recipeIssues } from "@/lib/cost/recipeHeal
 import type { SimulationInput } from "@/lib/cost/types";
 import { readKvConfig } from "@/server/kvConfig";
 import { readCostLibrary } from "@/server/kvCostLibrary";
-import { requireAdmin } from "@/server/requireAdmin";
+import { requireQuoteAccess } from "@/server/requireAdmin";
 
 /** 직원 견적. 서버에 저장된 원가만 쓰고, 원가 라이브러리 자체는 돌려주지 않는다. */
 export async function POST(request: NextRequest) {
-  const denied = requireAdmin(request);
+  const denied = requireQuoteAccess(request);
   if (denied) return denied;
   let input: SimulationInput | undefined;
   try {
