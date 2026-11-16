@@ -239,7 +239,7 @@ export function StaffCostQuote({ productId, onProductChange }: { productId: stri
         {priceOnly && (
           <p className="mt-2 text-sm text-amber-800">변경한 공급가를 확인해 주세요. {won(offeredPrice)} · 예상 이익률 {margin == null ? "—" : `${(margin * 100).toFixed(1)}%`}</p>
         )}
-        {specStale && <p className="mt-2 text-sm text-amber-800">규격이나 수량이 바뀌었습니다. 새 원가 {won(result?.supplyCost)}, 새 추천가 {won(recommended)}를 확인하기 전에는 저장할 수 없습니다.</p>}
+        {specStale && <p className="mt-2 text-sm text-amber-800">규격이나 수량이 바뀌었습니다. 새 원가 {won(result?.supplyCost)}, 새 추천가 {won(recommended)}. 확인하기 전에는 저장할 수 없습니다.</p>}
         {(priceOnly || specStale) && (
           <button type="button" className="mt-2 text-sm font-medium text-blue-700" onClick={() => { setManual(false); setManualSpec(""); setOffered(String(recommended ?? "")); setConfirmedKey(""); }}>새 추천가로 맞추기</button>
         )}
