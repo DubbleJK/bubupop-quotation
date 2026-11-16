@@ -15,9 +15,13 @@ export interface QuoteHistoryEntry {
   presentedSupplyPrice: number;
   presentedVat: number;
   presentedTotal: number;
+  staffName?: string;
+  customerName?: string;
+  adjustmentReason?: string;
   internal?: {
     supplyCost?: number;
     minimumSupplyPrice?: number;
+    recommendedSupplyPrice?: number;
     targetSupplyPrice?: number;
     highSupplyPrice?: number;
     profit?: number;

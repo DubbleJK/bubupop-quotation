@@ -1,13 +1,24 @@
 import Link from "next/link";
 import type { PublicCatalog, PublicMenuItem } from "@/lib/cost/publicCatalog";
 
+function rememberRecent(id: string) {
+  try {
+    const prev = JSON.parse(window.localStorage.getItem("quotation_recent_products") || "[]") as unknown;
+    const ids = Array.isArray(prev) ? prev.filter((item): item is string => typeof item === "string") : [];
+    window.localStorage.setItem("quotation_recent_products", JSON.stringify([id, ...ids.filter((item) => item !== id)].slice(0, 6)));
+  } catch {
+    /* 최근 품목은 이 브라우저에만 남는다. */
+  }
+}
+
 const productBtnClass =
   "flex min-h-12 flex-col items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-3 text-center text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]";
 
 function ItemLink({ item }: { item: PublicMenuItem }) {
   return (
-    <Link href={item.href} className={productBtnClass}>
+    <Link href={item.href} className={productBtnClass} onClick={() => rememberRecent(item.id)}>
       <span>{item.label}</span>
+      {item.note ? <span className="mt-1 text-xs font-normal text-amber-700">설정 필요</span> : null}
       {item.description ? <span className="mt-1 text-xs font-normal text-slate-500">{item.description}</span> : null}
     </Link>
   );

@@ -15,6 +15,8 @@ import { clearBrowserDraft, parseCostLibraryDraft, readBrowserDraft, writeBrowse
 import { CATALOG_PAGE_SIZE, PROCESS_CATEGORIES, RECENT_KEY, catalogPage, linkCount, matchesQuery, pickSuggestions, rememberId, sortByNameOrRecent } from "@/lib/cost/catalog";
 import { DEFAULT_MINIMUM_RATE, DEFAULT_TARGET_RATE, simulatePricing, type PricingResult, type QtyCompareRow } from "@/lib/cost/pricing";
 import { buildPublicCatalog, customerQuoteBlockReason, isListedOnCustomerHome } from "@/lib/cost/publicCatalog";
+import { inferPriceBasis, usageUnitPrice } from "@/lib/cost/rollPrice";
+import { recipeIssues } from "@/lib/cost/recipeHealth";
 import { CustomerMenuList } from "@/components/CustomerMenuList";
 import type {
   ChargeMethod,
@@ -344,6 +346,15 @@ function moneyLabel(price?: CostAmount): string {
   return won(price.amount);
 }
 
+function processPriceLabel(row: ProcessDef): string {
+  if (row.method === "per-order" && typeof row.setup?.amount === "number" && row.setup.status !== "unconfirmed") {
+    return `${won(row.setup.amount)} / 주문`;
+  }
+  if (row.variable && row.variable.status !== "unconfirmed" && typeof row.variable.amount === "number") return won(row.variable.amount);
+  if (typeof row.setup?.amount === "number" && row.setup.status !== "unconfirmed") return `${won(row.setup.amount)} / 주문`;
+  return "원가 미등록";
+}
+
 function EditorModal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/40 flex items-end sm:items-center justify-center p-2" role="dialog" aria-modal="true">
@@ -461,6 +472,22 @@ function MaterialsPanel({
   );
 }
 
+function RollCostPreview({ row }: { row: MaterialCost }) {
+  const priced = usageUnitPrice(row, 0.1, row.price.effectiveFrom || "2099-01-01");
+  const withWaste = priced.amount != null && typeof row.wasteRate === "number" && row.wasteRate >= 0 && row.wasteRate < 1
+    ? priced.amount / (1 - row.wasteRate)
+    : undefined;
+  return (
+    <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+      <p>구매 방식: {inferPriceBasis(row) === "per-usage" ? "사용 단위 가격" : "구매 단위 전체 가격"}</p>
+      <p>구매가격: {row.price.amount == null ? "미입력" : `${row.price.amount.toLocaleString("ko-KR")}원`} · 부가세 {row.price.tax === "inclusive" ? "포함" : "별도"}</p>
+      <p>롤 길이 {row.rollLengthM ?? row.conversion ?? "—"}m · 롤 폭 {row.rollWidthMm ?? "—"}mm · 폐기율 {row.wasteRate == null ? "—" : `${Math.round(row.wasteRate * 1000) / 10}%`}</p>
+      <p>환산 사용 단가 {priced.amount == null ? priced.reason ?? "—" : `${Math.round(priced.amount).toLocaleString("ko-KR")}원`}</p>
+      <p>폐기율 적용 후 {withWaste == null ? "—" : `${Math.round(withWaste).toLocaleString("ko-KR")}원`}. 부가세는 한 번만 빼고, 폐기율도 한 번만 적용합니다. 저장된 금액은 여기서 바꾸지 않습니다.</p>
+    </div>
+  );
+}
+
 function MaterialFields({ row, update }: { row: MaterialCost; update: (patch: Partial<MaterialCost>) => void }) {
   return (
     <div className="space-y-3">
@@ -516,7 +543,7 @@ function MaterialFields({ row, update }: { row: MaterialCost; update: (patch: Pa
               <option value="share">사용량 비례</option>
             </select>
           </label>
-          <p className="sm:col-span-3 text-xs text-slate-500">비우면 시트 배치는 기존처럼 A4로 계산하고, 그 사실을 견적에 표시합니다. 아크릴 판재는 가로와 세로를 입력하세요. 전체 사용은 필요한 장수만큼, 사용량 비례는 한 장에 들어가는 개수 중 주문 수량만큼만 재료비에 넣습니다. 비례는 남은 판재를 다시 쓸 수 있을 때의 방식이고 로스율은 그 수량에 한 번 적용됩니다. 출력·커팅 공정비는 어느 쪽이든 필요한 장수로 계산합니다.</p>
+          <p className="sm:col-span-3 text-xs text-slate-500">여기 적은 가로·세로는 판재 원본입니다. 견적은 공통 여백 5mm를 사방에 한 번 뺍니다. 205×292처럼 이미 여백을 뺀 크기를 적으면 여백이 두 번 빠져 사용 영역이 195×282가 됩니다. 저장된 판재 크기는 바꾸지 않았습니다.</p>
         </div>
       )}
       <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">버리는 비율 (%) (필수)
@@ -525,7 +552,14 @@ function MaterialFields({ row, update }: { row: MaterialCost; update: (patch: Pa
           update({ wasteRate: percent == null ? undefined : percent / 100, wasteStatus: percent == null ? "unconfirmed" : "confirmed" });
         }} />
       </label>
-      <AmountFields title="산 가격 (필수)" price={row.price} onChange={(price) => update({ price })} />
+      <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">구매 방식
+        <select className={fieldClass} value={inferPriceBasis(row)} onChange={(e) => update({ priceBasis: e.target.value === "per-usage" ? "per-usage" : "per-purchase" })}>
+          <option value="per-purchase">롤·구매단위 전체 가격</option>
+          <option value="per-usage">1m·사용단위 가격</option>
+        </select>
+      </label>
+      <AmountFields title="구매가격 (필수)" price={row.price} onChange={(price) => update({ price })} />
+      <RollCostPreview row={row} />
       <details className="text-sm">
         <summary className="cursor-pointer text-slate-700">선택 항목</summary>
         <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs mt-2">공급처
@@ -604,7 +638,7 @@ function ProcessesPanel({
           <li key={row.id} className={`p-3 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 text-sm ${row.active ? "" : "opacity-60"}`}>
             <div>
               <p className="font-medium text-slate-800">{row.label || "이름 없음"} {row.favorite ? "★" : ""} {!row.active && <span className="text-xs text-slate-500">비활성</span>}</p>
-              <p className="text-xs text-slate-500">{row.category || "미분류"} · {chargeMethods.find((item) => item.value === row.method)?.label ?? row.method} · {moneyLabel(row.variable ?? row.setup)} · 연결 {linkCount(library, "process", row.id)}개 품목</p>
+              <p className="text-xs text-slate-500">{row.category || "미분류"} · {row.equipmentId ? "장비 연결" : "장비 없음"} · {chargeMethods.find((item) => item.value === row.method)?.label ?? row.method} · {processPriceLabel(row)} · 연결 {linkCount(library, "process", row.id)}개 품목</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" className="text-xs border border-slate-300 rounded px-2 py-1" onClick={() => update(row.id, { favorite: !row.favorite })}>{row.favorite ? "즐겨찾기 해제" : "즐겨찾기"}</button>
@@ -1228,19 +1262,23 @@ function ProductsPanel({
               }}
             />
           </div>
+          <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">최소 판매금액 (부가세 별도 공급가)
+            <input className={fieldClass} type="number" placeholder="없으면 비움. 원가에 더하지 않습니다." value={recipe.minimumSupplyPrice ?? ""} onChange={(e) => patchRecipe({ minimumSupplyPrice: optionalNumber(e.target.value) })} />
+          </label>
+          {recipeIssues(library, recipe).map((issue) => <p key={issue} className="text-xs text-amber-800">{issue}</p>)}
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={isListedOnCustomerHome(recipe)}
               disabled={customerQuoteBlockReason(recipe) != null}
-              onChange={(e) => patchRecipe({ customerVisible: e.target.checked })}
+              onChange={(e) => patchRecipe({ customerVisible: e.target.checked, staffHidden: !e.target.checked })}
             />
-            고객 첫 화면에 표시
+            직원 견적 화면에 표시
           </label>
           {customerQuoteBlockReason(recipe) ? (
             <p className="text-xs text-amber-800">{customerQuoteBlockReason(recipe)}</p>
           ) : (
-            <p className="text-xs text-slate-500">숨기면 첫 화면과 견적 품목 목록에서 빠집니다. 주소로 들어온 기존 계산은 남고, 판매단가는 바뀌지 않습니다. 다른 기기는 원가를 저장한 뒤에 같아집니다.</p>
+            <p className="text-xs text-slate-500">숨기면 직원 견적 목록에서 빠집니다. 기존 8개 계산식과 판매단가는 바뀌지 않습니다. 다른 기기는 저장한 뒤에 같아집니다.</p>
           )}
           {library.recipes.some((row) => row.productId !== recipe.productId && row.label.trim() !== "" && row.label.trim() === recipe.label.trim() && isListedOnCustomerHome(row) && isListedOnCustomerHome(recipe)) && (
             <p className="text-xs text-amber-800">같은 이름의 품목이 고객 화면에 이미 있습니다. 둘 다 보이면 손님에게 같은 메뉴가 두 번 나옵니다.</p>
@@ -1248,7 +1286,7 @@ function ProductsPanel({
         </article>
       )}
       <section className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-slate-800">고객 첫 화면 미리보기</h3>
+        <h3 className="text-sm font-semibold text-slate-800">직원 견적 화면 미리보기</h3>
         <p className="text-xs text-slate-500">지금 화면의 공개 품목만 보여 줍니다. 다른 기기에는 서버에 저장한 뒤에 반영됩니다. 매입가와 이익률은 이 목록에 없습니다.</p>
         <CustomerMenuList catalog={buildPublicCatalog(library)} />
       </section>
@@ -1627,7 +1665,7 @@ function HistoryPanel({ library }: { library: CostLibrary }) {
             <p>
               {entry.createdAt} · {library.recipes.find((row) => row.productId === entry.productId)?.label ?? entry.productId}
             </p>
-            <p>그때 고객에게 보인 가격 {won(entry.presentedSupplyPrice)}</p>
+            <p>그때 제시한 공급가 {won(entry.presentedSupplyPrice)}</p>
             <p className="text-xs text-slate-500">
               그때 원가 {won(entry.internal?.supplyCost)} · 그때 보통 판매가 {won(entry.internal?.targetSupplyPrice)}
               {entry.internal?.missing?.length ? ` · 미등록 ${entry.internal.missing.join(", ")}` : ""}
