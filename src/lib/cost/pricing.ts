@@ -15,6 +15,7 @@ import type {
   SimulationInput,
 } from "./types";
 import { currentLegacySale, type LegacySale } from "./legacySale";
+import { usageUnitPrice } from "./rollPrice";
 
 export interface CostLine {
   lineId: string;
@@ -53,6 +54,10 @@ export interface PricingResult {
   target?: PriceBand;
   high?: PriceBand;
   minimumSalePrice?: number;
+  /** 목표 이익률 추천가와 품목 최소 공급가 중 큰 금액. 원가에 더하지 않는다. */
+  recommendedSupplyPrice?: number;
+  /** 품목에 적은 부가세 별도 최소 공급가. 10원 단위로 올린 값. */
+  productMinimumSupply?: number;
   referenceSimulation: boolean;
   approvalAllowed: boolean;
   /** 작업비 없이 재료비만 있으면 추천가를 그대로 믿지 않는다. */
@@ -168,13 +173,13 @@ function measure(args: {
   if (!placed.ok) return { missing: placed.error ?? "판재에 배치할 수 없습니다." };
   const turned = placed.rotated ? ", 돌려 배치" : "";
   const sourceNote = hasSheet
-    ? `판재 ${sheetWidthMm}×${sheetHeightMm}mm`
-    : "판재 규격이 없어 A4 210×297mm로 계산했습니다";
+    ? `판재 ${sheetWidthMm}×${sheetHeightMm}mm, 사방 여백 ${args.trimMarginMm}mm, 사용 영역 ${placed.usableWidthMm}×${placed.usableHeightMm}mm`
+    : `판재 규격이 없어 A4 210×297mm로 계산했습니다. 사방 여백 ${args.trimMarginMm}mm, 사용 영역 ${placed.usableWidthMm}×${placed.usableHeightMm}mm`;
   return {
     value: placed.sheets,
     unitLabel: "장",
     perSheet: placed.perSheet,
-    note: `${sourceNote}. 한 장에 ${placed.perSheet}개, ${placed.sheets}장${turned}. 격자 배치이며 네스팅이 아닙니다.`,
+    note: `${sourceNote}. 한 장에 ${placed.perSheet}개, ${placed.sheets}장${turned}. 간격은 스티커 사이에만 둡니다. 격자 배치이며 네스팅이 아닙니다.`,
   };
 }
 
@@ -198,17 +203,9 @@ function materialCost(
     unitPrice = tier;
     gross = tier;
   } else {
-    const exclusive = exclusiveAmount(material.price, vatRate, asOf);
-    if (exclusive === "missing") return { reason: "매입가가 미등록입니다." };
-    if (exclusive === "later") return { reason: "매입가 적용일 전입니다." };
-    const sameUnit = material.purchaseUnit === material.usageUnit;
-    unitPrice = exclusive;
-    if (!sameUnit) {
-      if (material.conversionStatus !== "confirmed" || !finite(material.conversion) || material.conversion <= 0) {
-        return { reason: "단위 환산이 미등록입니다." };
-      }
-      unitPrice = exclusive / material.conversion;
-    }
+    const priced = usageUnitPrice(material, vatRate, asOf);
+    if (priced.reason || priced.amount == null) return { reason: priced.reason ?? "매입가가 미등록입니다." };
+    unitPrice = priced.amount;
     status = material.price.status === "code-reference" ? "code-reference" : "confirmed";
   }
   if (material.wasteStatus !== "confirmed" || !finite(material.wasteRate) || material.wasteRate < 0 || material.wasteRate >= 1) {
@@ -519,6 +516,13 @@ export function simulatePricing(
       base.profitBasis = fixedCost > 0 ? "total-cost" : "contribution";
       base.minimum = recommendSupply(supplyCost, minimumRate, vatRate);
       base.target = recommendSupply(supplyCost, targetRate, vatRate);
+      if (finite(recipe.minimumSupplyPrice) && recipe.minimumSupplyPrice > 0) {
+        base.productMinimumSupply = ceilToNearest10(recipe.minimumSupplyPrice);
+      }
+      const targetPrice = base.target?.supplyPrice;
+      if (finite(targetPrice) || finite(base.productMinimumSupply)) {
+        base.recommendedSupplyPrice = Math.max(targetPrice ?? 0, base.productMinimumSupply ?? 0);
+      }
     }
     const limits = [recipe.reviewAboveQty, ...recipe.lines.map((line) => library.processes.find((row) => row.id === line.refId)?.reviewAboveQty)];
     const limit = limits.filter((value): value is number => finite(value) && value > 0).sort((a, b) => a - b)[0];

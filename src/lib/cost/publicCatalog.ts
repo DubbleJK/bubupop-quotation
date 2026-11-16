@@ -1,11 +1,15 @@
+import { recipeIssues } from "./recipeHealth";
 import type { CostLibrary, LegacyQuoteId, ProductRecipe } from "./types";
 
 export interface PublicMenuItem {
   id: string;
   label: string;
   description?: string;
-  legacyQuoteId: LegacyQuoteId;
+  legacyQuoteId?: LegacyQuoteId;
   href: string;
+  ready: boolean;
+  note?: string;
+  favorite?: boolean;
 }
 
 export interface PublicMenuGroup {
@@ -34,32 +38,36 @@ const LEGACY_ORDER: LegacyQuoteId[] = [
 
 export function customerQuoteBlockReason(recipe: ProductRecipe): string | null {
   if (recipe.legacyQuoteId) return null;
-  if (recipe.approvedSupplyPrice == null && recipe.fixedSupplyPrice == null) {
-    return "확정 판매가가 없습니다. 고객 견적 계산도 아직 없어 첫 화면에 올리지 않습니다.";
-  }
-  return "고객 견적 계산이 아직 없습니다. 확정 판매가만으로는 계산 화면이 생기지 않으므로 공개하지 않습니다.";
+  if (recipe.lines.length === 0) return "원자재나 공정을 연결하면 직원 견적에 올릴 수 있습니다.";
+  return null;
 }
 
 export function isListedOnCustomerHome(recipe: ProductRecipe): boolean {
-  if (!recipe.active) return false;
-  if (recipe.customerVisible === false) return false;
-  if (!recipe.legacyQuoteId) return false;
-  return recipe.customerVisible === true || recipe.customerVisible == null;
+  if (!recipe.active || recipe.staffHidden === true) return false;
+  if (recipe.legacyQuoteId) return recipe.customerVisible !== false;
+  if (recipe.lines.length === 0) return false;
+  if (recipe.customerVisible === false && recipe.staffHidden == null) return true;
+  return recipe.customerVisible !== false;
 }
 
-function toMenuItem(recipe: ProductRecipe): PublicMenuItem | null {
-  if (!isListedOnCustomerHome(recipe) || !recipe.legacyQuoteId) return null;
+function toMenuItem(library: Pick<CostLibrary, "materials" | "processes" | "recipes">, recipe: ProductRecipe): PublicMenuItem | null {
+  if (!isListedOnCustomerHome(recipe)) return null;
   const description = recipe.description?.trim();
+  const issues = recipe.legacyQuoteId ? [] : recipeIssues(library, recipe);
+  const quoteId = recipe.legacyQuoteId ?? recipe.productId;
   return {
     id: recipe.productId,
-    label: recipe.label.trim() || recipe.legacyQuoteId,
+    label: recipe.label.trim() || quoteId,
     description: description || undefined,
     legacyQuoteId: recipe.legacyQuoteId,
-    href: `/quote?product=${encodeURIComponent(recipe.legacyQuoteId)}`,
+    href: `/quote?product=${encodeURIComponent(quoteId)}`,
+    ready: issues.length === 0,
+    note: issues[0],
+    favorite: recipe.favorite === true,
   };
 }
 
-export function buildPublicCatalog(library: Pick<CostLibrary, "recipes" | "groups">): PublicCatalog {
+export function buildPublicCatalog(library: Pick<CostLibrary, "recipes" | "groups" | "materials" | "processes">): PublicCatalog {
   const order = new Map(library.recipes.map((recipe, index) => [recipe.productId, index]));
   const activeGroups = [...(library.groups ?? [])]
     .filter((group) => group.active)
@@ -70,14 +78,14 @@ export function buildPublicCatalog(library: Pick<CostLibrary, "recipes" | "group
 
   const groups: PublicMenuGroup[] = activeGroups.map((group) => {
     const products = sortItems(library.recipes.filter((recipe) => recipe.groupId === group.id))
-      .map(toMenuItem)
+      .map((recipe) => toMenuItem(library, recipe))
       .filter((item): item is PublicMenuItem => item != null);
     return { id: group.id, label: group.label, products };
   }).filter((group) => group.products.length > 0);
 
   const knownGroupIds = new Set((library.groups ?? []).map((group) => group.id));
   const ungrouped = sortItems(library.recipes.filter((recipe) => !recipe.groupId || !knownGroupIds.has(recipe.groupId)))
-    .map(toMenuItem)
+    .map((recipe) => toMenuItem(library, recipe))
     .filter((item): item is PublicMenuItem => item != null);
 
   return {
@@ -109,10 +117,13 @@ export function defaultPublicCatalog(items: { id: LegacyQuoteId; label: string }
       label: item.label && item.label !== item.id ? item.label : labels[item.id],
       legacyQuoteId: item.id,
       href: `/quote?product=${encodeURIComponent(item.id)}`,
+      ready: true,
     })),
   };
 }
 
 export function listedLegacyIds(catalog: PublicCatalog): string[] {
-  return [...catalog.groups.flatMap((group) => group.products), ...catalog.ungrouped].map((item) => item.legacyQuoteId);
+  return [...catalog.groups.flatMap((group) => group.products), ...catalog.ungrouped]
+    .map((item) => item.legacyQuoteId)
+    .filter((id): id is LegacyQuoteId => Boolean(id));
 }

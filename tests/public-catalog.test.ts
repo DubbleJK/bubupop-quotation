@@ -64,6 +64,6 @@ describe("고객 첫 화면 목록", () => {
     expect(JSON.stringify(catalog)).not.toContain("새 키링");
     expect(JSON.stringify(catalog)).not.toContain("내부 원가");
     const created = library().recipes.find((row) => row.productId === "new-item");
-    expect(customerQuoteBlockReason(created!)).toContain("고객 견적 계산이 아직 없습니다");
+    expect(customerQuoteBlockReason(created!)).toContain("원자재나 공정");
   });
 });

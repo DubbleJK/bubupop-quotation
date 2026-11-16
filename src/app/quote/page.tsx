@@ -16,6 +16,7 @@ import { BusinessCardForm } from "@/components/forms/BusinessCardForm";
 import { BannerForm } from "@/components/forms/BannerForm";
 import { PORTAL_URL } from "@/lib/portalUrl";
 import { listedLegacyIds, type PublicCatalog } from "@/lib/cost/publicCatalog";
+import { StaffCostQuote } from "@/components/StaffCostQuote";
 
 const emptySummary: SummaryPayload = {
   mainValue: undefined,
@@ -65,9 +66,7 @@ export default function QuotePage() {
     void configProvider.loadQuoteConfig().then((next) => {
       if (cancelled) return;
       setResolution(next);
-      if (next.ready && urlParam && next.config.products.some((item) => item.id === urlParam)) {
-        setProductId(urlParam);
-      }
+      if (urlParam) setProductId(urlParam);
     });
     return () => {
       cancelled = true;
@@ -133,13 +132,17 @@ export default function QuotePage() {
           <>
         <p className="mb-3 text-xs text-slate-500">{describeQuoteSource(resolution)}</p>
         <div className="mb-4">
+          {config.products.some((item) => item.id === productId) ? (
           <ProductGridPicker
             products={publicIds ? config.products.filter((item) => publicIds.includes(item.id) || item.id === productId) : config.products}
             value={productId}
             onChange={handleProductChange}
           />
+          ) : (
+            <StaffCostQuote productId={productId} />
+          )}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {config.products.some((item) => item.id === productId) && <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5">
               {productId === "pop" && (
@@ -207,7 +210,7 @@ export default function QuotePage() {
               />
             </div>
           </div>
-        </div>
+        </div>}
           </>
         )}
       </main>

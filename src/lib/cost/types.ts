@@ -63,6 +63,12 @@ export interface MaterialCost {
   /** 롤 길이. 배치 길이 계산에는 쓰지 않는다. */
   rollLengthM?: number;
   conversionStatus: "confirmed" | "unconfirmed";
+  /**
+   * per-purchase는 롤·박스 전체 금액이라 환산 수량으로 나눈다.
+   * per-usage는 이미 1m·1장 금액이라 롤 길이로 다시 나누지 않는다.
+   * 비우면 기존 저장값의 의미로 판단하고, 저장된 금액은 바꾸지 않는다.
+   */
+  priceBasis?: "per-purchase" | "per-usage";
   price: CostAmount;
   /** 수량 구간 매입가. 있으면 그 구간의 사용단위 단가를 쓴다. */
   purchaseTiers?: QtyPriceBand[];
@@ -175,6 +181,10 @@ export interface ProductRecipe {
   lines: RecipeLine[];
   /** 관리자가 직접 적은 고정 공급가. 고객 견적에는 자동 반영하지 않는다. */
   fixedSupplyPrice?: number;
+  /** 부가세 별도 최소 공급가. 원가에 더하지 않고, 목표 이익률 추천가와 비교해 큰 금액을 쓴다. */
+  minimumSupplyPrice?: number;
+  /** 관리자가 직원 견적 목록에서 뺀 품목. */
+  staffHidden?: boolean;
   /** 추천가 승인 기록. 고객 견적 판매가를 바꾸지 않는다. */
   approvedSupplyPrice?: number;
   /** 새 품목을 고객 목록에 올릴 준비. 기존 8개 견적 분기는 이 값과 무관하다. */
