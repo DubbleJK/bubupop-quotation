@@ -633,7 +633,7 @@ export function compareQuantities(
   const ordered = [...qtys].filter((qty) => finite(qty) && qty >= 1).sort((a, b) => a - b);
   const rows: QtyCompareRow[] = ordered.map((qty) => {
     const result = simulatePricing(library, config, { ...input, qty }, asOf);
-    const recommended = result.target?.supplyPrice;
+    const recommended = result.recommendedSupplyPrice ?? result.target?.supplyPrice;
     const status: QtyCompareRow["status"] = result.missing.length > 0 ? "missing" : result.capacityWarning ? "review" : result.belowMinimum ? "low-margin" : "ok";
     return {
       qty,

@@ -3,6 +3,8 @@ import { placeOnSheet } from "../src/lib/calc/sheet";
 import { getFileConfig } from "../src/lib/config/fileConfig";
 import { emptyCostLibrary } from "../src/lib/cost/library";
 import { simulatePricing } from "../src/lib/cost/pricing";
+import { rejectQuoteSave } from "../src/lib/cost/quoteSave";
+import { quoteStage } from "../src/lib/cost/recipeHealth";
 import { usageUnitPrice } from "../src/lib/cost/rollPrice";
 import type { CostAmount, CostLibrary, MaterialCost, ProcessDef, ProductRecipe } from "../src/lib/cost/types";
 
@@ -90,6 +92,35 @@ describe("롤 매입가와 직원 견적", () => {
     expect(costs[0]).toBeLessThan(costs[1] ?? 0);
     expect(costs[3]).toBe(20773);
     expect(new Set(costs).size).toBe(costs.length);
+  });
+
+  it("작은 수량은 최소 판매금액 25,000원을 최종 추천가로 쓴다", () => {
+    const art = stickerLibrary("art", 90, 0.01, 200);
+    art.recipes[0]!.minimumSupplyPrice = 25000;
+    const yup = stickerLibrary("yup", 118, 0.02, 400);
+    yup.recipes[0]!.minimumSupplyPrice = 25000;
+    const artResult = simulatePricing(art, config, { productId: "sticker", qty: 2, widthMm: 30, heightMm: 40, gapMm: 5 }, asOf);
+    const yupResult = simulatePricing(yup, config, { productId: "sticker", qty: 2, widthMm: 30, heightMm: 40, gapMm: 5 }, asOf);
+    expect(artResult.supplyCost).toBe(6591);
+    expect(artResult.target?.supplyPrice).toBe(10140);
+    expect(artResult.recommendedSupplyPrice).toBe(25000);
+    expect(yupResult.supplyCost).toBe(6820);
+    expect(yupResult.target?.supplyPrice).toBe(10500);
+    expect(yupResult.recommendedSupplyPrice).toBe(25000);
+  });
+
+  it("조건이 바뀐 공급가와 설정 미완료 품목은 저장하지 않는다", () => {
+    const art = stickerLibrary("art", 90, 0.01, 200);
+    art.recipes[0]!.minimumSupplyPrice = 25000;
+    const input = { productId: "sticker", qty: 100, widthMm: 66, heightMm: 104, gapMm: 5 };
+    expect(rejectQuoteSave(art, config, { ...input, input, presentedSupplyPrice: 25000, supplyCost: 6591, recommendedSupplyPrice: 25000 }, asOf)).toContain("조건이 바뀌었습니다");
+    expect(rejectQuoteSave(art, config, { ...input, input, presentedSupplyPrice: 31960, supplyCost: 20773, recommendedSupplyPrice: 31960 }, asOf)).toBeNull();
+    const broken = stickerLibrary("old", 90, 0.01, 200);
+    broken.recipes[0]!.lines = broken.recipes[0]!.lines.slice(0, 2);
+    broken.recipes[0]!.label = "스티커(오키제작a4)";
+    broken.recipes.push({ ...art.recipes[0]!, productId: "full", label: "아트지스티커" });
+    expect(quoteStage(broken, broken.recipes[0]!)).toBe("incomplete");
+    expect(rejectQuoteSave(broken, config, { productId: "sticker", input, presentedSupplyPrice: 450, supplyCost: 450, recommendedSupplyPrice: 450 }, asOf)).toContain("설정이 끝나지");
   });
 
   it("최소 판매금액은 추천가와 비교하고 원가에 더하지 않는다", () => {

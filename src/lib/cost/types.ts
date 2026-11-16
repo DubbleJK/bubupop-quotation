@@ -185,6 +185,8 @@ export interface ProductRecipe {
   minimumSupplyPrice?: number;
   /** 관리자가 직원 견적 목록에서 뺀 품목. */
   staffHidden?: boolean;
+  /** 사용 가능, 검증 중, 설정 필요. 비우면 구성 상태로 판단하고 기존 8개는 사용 가능으로 둔다. */
+  quoteStatus?: "ready" | "review" | "incomplete";
   /** 추천가 승인 기록. 고객 견적 판매가를 바꾸지 않는다. */
   approvedSupplyPrice?: number;
   /** 새 품목을 고객 목록에 올릴 준비. 기존 8개 견적 분기는 이 값과 무관하다. */

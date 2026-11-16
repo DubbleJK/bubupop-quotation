@@ -3,7 +3,7 @@ import { getFileConfig } from "@/lib/config/fileConfig";
 import type { AppConfig } from "@/lib/config/types";
 import { seoulToday } from "@/lib/cost/library";
 import { simulatePricing } from "@/lib/cost/pricing";
-import { recipeIssues } from "@/lib/cost/recipeHealth";
+import { quoteStage, quoteStageLabel, recipeIssues } from "@/lib/cost/recipeHealth";
 import type { SimulationInput } from "@/lib/cost/types";
 import { readKvConfig } from "@/server/kvConfig";
 import { readCostLibrary } from "@/server/kvCostLibrary";
@@ -32,8 +32,11 @@ export async function POST(request: NextRequest) {
   const usages = new Set(recipe.lines.map((line) => line.usage));
   const needsSize = [...usages].some((usage) => usage === "per-meter-layout" || usage === "per-sheet-imposition" || usage === "per-m2");
   const result = simulatePricing(stored.library, config, input, seoulToday());
+  const stage = quoteStage(stored.library, recipe);
   return NextResponse.json({
     label: recipe.label,
+    stage,
+    stageLabel: quoteStageLabel(stage),
     issues: recipeIssues(stored.library, recipe),
     fields: { width: needsSize, height: needsSize, gap: usages.has("per-meter-layout") || usages.has("per-sheet-imposition") },
     result: {

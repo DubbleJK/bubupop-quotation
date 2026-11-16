@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { calcVatAndTotal } from "@/lib/calc/common";
 import { getFileConfig } from "@/lib/config/fileConfig";
 import {
   blankAmount,
@@ -16,7 +17,7 @@ import { CATALOG_PAGE_SIZE, PROCESS_CATEGORIES, RECENT_KEY, catalogPage, linkCou
 import { DEFAULT_MINIMUM_RATE, DEFAULT_TARGET_RATE, simulatePricing, type PricingResult, type QtyCompareRow } from "@/lib/cost/pricing";
 import { buildPublicCatalog, customerQuoteBlockReason, isListedOnCustomerHome } from "@/lib/cost/publicCatalog";
 import { inferPriceBasis, usageUnitPrice } from "@/lib/cost/rollPrice";
-import { recipeIssues } from "@/lib/cost/recipeHealth";
+import { quoteStage, quoteStageLabel, recipeIssues } from "@/lib/cost/recipeHealth";
 import { CustomerMenuList } from "@/components/CustomerMenuList";
 import type {
   ChargeMethod,
@@ -1262,6 +1263,17 @@ function ProductsPanel({
               }}
             />
           </div>
+          <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">상품 상태
+            <select className={fieldClass} value={recipe.quoteStatus ?? quoteStage(library, recipe)} onChange={(e) => {
+              const value = e.target.value;
+              patchRecipe({ quoteStatus: value === "review" || value === "incomplete" || value === "ready" ? value : undefined });
+            }}>
+              <option value="ready">사용 가능</option>
+              <option value="review">검증 중</option>
+              <option value="incomplete">설정 필요</option>
+            </select>
+          </label>
+          <p className="text-xs text-slate-500">지금 상태: {quoteStageLabel(quoteStage(library, recipe))}. 설정 필요는 확정 견적으로 저장되지 않습니다. 기존 8개 품목은 상태를 지정하지 않으면 사용 가능입니다.</p>
           <label className="flex flex-col gap-1 text-xs text-slate-500 max-w-xs">최소 판매금액 (부가세 별도 공급가)
             <input className={fieldClass} type="number" placeholder="없으면 비움. 원가에 더하지 않습니다." value={recipe.minimumSupplyPrice ?? ""} onChange={(e) => patchRecipe({ minimumSupplyPrice: optionalNumber(e.target.value) })} />
           </label>
@@ -1456,7 +1468,7 @@ function QuotePanel({
 
   const record = async () => {
     if (!result) return;
-    const presented = result.current?.supplyPrice ?? result.target?.supplyPrice;
+    const presented = result.recommendedSupplyPrice ?? result.current?.supplyPrice ?? result.target?.supplyPrice;
     if (presented == null) {
       setNote("이력에 남길 판매 공급가가 없습니다.");
       return;
@@ -1476,7 +1488,8 @@ function QuotePanel({
           presentedTotal: result.current?.total ?? result.target?.total ?? 0,
           internal: {
             supplyCost: result.supplyCost,
-            minimumSupplyPrice: result.minimum?.supplyPrice,
+            minimumSupplyPrice: result.productMinimumSupply ?? result.minimum?.supplyPrice,
+            recommendedSupplyPrice: result.recommendedSupplyPrice,
             targetSupplyPrice: result.target?.supplyPrice,
             highSupplyPrice: result.high?.supplyPrice,
             profit: result.contribution,
@@ -1516,7 +1529,7 @@ function QuotePanel({
               <tr>
                 <th className="p-2">수량</th>
                 <th className="p-2">총제작원가</th>
-                <th className="p-2">추천 공급가</th>
+                <th className="p-2">최종 추천 공급가</th>
                 <th className="p-2">개당 공급가</th>
                 <th className="p-2">예상 이익률</th>
                 <th className="p-2">상태</th>
@@ -1587,8 +1600,10 @@ function QuotePanel({
             ) : (
               <>
                 <Band title="최소 확보 이익률 공급가" band={result.minimum} />
-                <Band title="목표 이익률 추천 공급가" band={result.target} />
-                {result.target?.vat != null && <p>추천가 부가세 {won(result.target.vat)} · 최종 총액 {won(result.target.total)}</p>}
+                <Band title="목표 이익률 기준 공급가" band={result.target} />
+                <p>품목별 최소 공급가 {won(result.productMinimumSupply)}</p>
+                <p className="text-base font-semibold">최종 추천 공급가 {won(result.recommendedSupplyPrice)}</p>
+                {result.recommendedSupplyPrice != null && <p>최종 추천가 부가세 {won(calcVatAndTotal(result.recommendedSupplyPrice, result.vatRateUsed).vat)} · 결제금액 {won(calcVatAndTotal(result.recommendedSupplyPrice, result.vatRateUsed).total)}</p>}
                 {result.target?.profit != null && <p>추천가 기준 이익금 {won(result.target.profit)} · 이익률 {pct(result.target.marginRate)}</p>}
               </>
             )}
@@ -1636,7 +1651,13 @@ function HistoryPanel({ library }: { library: CostLibrary }) {
       createdAt: string;
       productId: string;
       presentedSupplyPrice: number;
-      internal?: { supplyCost?: number; targetSupplyPrice?: number; missing: string[] };
+      presentedVat?: number;
+      presentedTotal?: number;
+      staffName?: string;
+      customerName?: string;
+      adjustmentReason?: string;
+      input?: Record<string, number | string>;
+      internal?: { supplyCost?: number; targetSupplyPrice?: number; recommendedSupplyPrice?: number; missing: string[] };
     }[]
   >([]);
   const [note, setNote] = useState<string | null>(null);
@@ -1665,10 +1686,13 @@ function HistoryPanel({ library }: { library: CostLibrary }) {
             <p>
               {entry.createdAt} · {library.recipes.find((row) => row.productId === entry.productId)?.label ?? entry.productId}
             </p>
-            <p>그때 제시한 공급가 {won(entry.presentedSupplyPrice)}</p>
+            <p>그때 제시한 공급가 {won(entry.presentedSupplyPrice)} · 부가세 {won(entry.presentedVat)} · 총액 {won(entry.presentedTotal)}</p>
             <p className="text-xs text-slate-500">
-              그때 원가 {won(entry.internal?.supplyCost)} · 그때 보통 판매가 {won(entry.internal?.targetSupplyPrice)}
-              {entry.internal?.missing?.length ? ` · 미등록 ${entry.internal.missing.join(", ")}` : ""}
+              그때 원가 {won(entry.internal?.supplyCost)} · 그때 추천가 {won(entry.internal?.recommendedSupplyPrice ?? entry.internal?.targetSupplyPrice)}
+              {entry.staffName ? ` · 담당자 ${entry.staffName}` : ""}
+              {entry.customerName ? ` · 거래처 ${entry.customerName}` : ""}
+              {entry.input?.widthMm != null ? ` · ${entry.input.widthMm}×${entry.input.heightMm}mm ${entry.input.qty}개` : ""}
+              {entry.adjustmentReason ? ` · ${entry.adjustmentReason}` : ""}
             </p>
           </li>
         ))}

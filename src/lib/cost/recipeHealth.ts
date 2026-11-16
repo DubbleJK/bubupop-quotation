@@ -1,5 +1,30 @@
 import type { CostLibrary, ProductRecipe } from "./types";
 
+export type QuoteStage = "ready" | "review" | "incomplete" | "hidden";
+
+/** 관리자가 저장한 상태가 있으면 그것을 쓴다. 없으면 구성으로 판단한다. */
+export function quoteStage(library: Pick<CostLibrary, "materials" | "processes" | "recipes">, recipe: ProductRecipe): QuoteStage {
+  if (!recipe.active || recipe.staffHidden === true) return "hidden";
+  if (recipe.quoteStatus === "ready" || recipe.quoteStatus === "review" || recipe.quoteStatus === "incomplete") return recipe.quoteStatus;
+  if (recipe.legacyQuoteId) return "ready";
+  const issues = recipeIssues(library, recipe);
+  if (issues.length > 0 || recipe.lines.length === 0) return "incomplete";
+  const provisional = recipe.lines.some((line) => {
+    if (line.kind !== "process") return false;
+    const process = library.processes.find((row) => row.id === line.refId);
+    return Boolean(process && (process.label.includes("잠정") || process.label.includes("임시") || process.variable?.status === "code-reference"));
+  });
+  if (provisional || recipe.label === "DTF출력") return "review";
+  return "ready";
+}
+
+export function quoteStageLabel(stage: QuoteStage): string {
+  if (stage === "ready") return "사용 가능";
+  if (stage === "review") return "검증 중";
+  if (stage === "hidden") return "비활성";
+  return "설정 필요";
+}
+
 /** 직원 화면에 보여줄 설정 상태. 금액은 넣지 않는다. */
 export function recipeIssues(library: Pick<CostLibrary, "materials" | "processes" | "recipes">, recipe: ProductRecipe): string[] {
   const issues: string[] = [];
