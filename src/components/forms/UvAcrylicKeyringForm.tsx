@@ -1,27 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   calculateQuote,
   uvRecordAmounts,
   type UvAcrylicKeyringQuote,
 } from "@/lib/calc/uvAcrylicKeyring";
+import type { SaleRecordSnapshot } from "../SaleQuoteRecord";
 import type { SummaryPayload } from "../StickySummary";
-
-export interface UvRecordSnapshot {
-  width: number;
-  height: number;
-  qty: number;
-  supplyTotal: number;
-  vat: number;
-  finalPrice: number;
-  stale: boolean;
-}
 
 export interface UvAcrylicKeyringFormProps {
   onReset: () => void;
   onSummaryChange?: (payload: SummaryPayload) => void;
-  onRecordChange?: (snapshot: UvRecordSnapshot | null) => void;
+  onRecordChange?: (snapshot: SaleRecordSnapshot | null) => void;
 }
 
 const MAX_DIMENSION_MM = 1000;
@@ -141,13 +132,16 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
       onRecordChange?.(null);
       return;
     }
+    const amounts = uvRecordAmounts(result);
     onRecordChange?.({
-      width: result.width,
-      height: result.height,
+      productId: "uv-acrylic-keyring",
+      label: "UV아크릴키링",
+      supplyPrice: amounts.presentedSupplyPrice,
+      vat: amounts.presentedVat,
+      total: amounts.presentedTotal,
       qty: result.qty,
-      supplyTotal: result.supplyTotal,
-      vat: result.vat,
-      finalPrice: result.finalPrice,
+      widthMm: result.width,
+      heightMm: result.height,
       stale,
     });
   }, [result, stale, onRecordChange]);
@@ -346,94 +340,6 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
       >
         초기화
       </button>
-    </div>
-  );
-}
-
-export function UvQuoteRecord({
-  role,
-  snapshot,
-}: {
-  role: "admin" | "staff" | null;
-  snapshot: UvRecordSnapshot | null;
-}) {
-  const [staffName, setStaffName] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState("");
-  const savingRef = useRef(false);
-  if (!snapshot) return null;
-  const canSave = role === "admin" && !snapshot.stale && !saving;
-
-  const save = async () => {
-    if (!snapshot || snapshot.stale || role !== "admin" || savingRef.current) return;
-    const current = snapshot;
-    savingRef.current = true;
-    setSaving(true);
-    setSaved("");
-    try {
-    const amounts = uvRecordAmounts({
-      width: current.width,
-      height: current.height,
-      qty: current.qty,
-      area: 0,
-      quantityBracket: "",
-      unitSupplyPrice: current.supplyTotal,
-      supplyTotal: current.supplyTotal,
-      vat: current.vat,
-      baseTotal: current.finalPrice,
-      adjustmentRate: 1,
-      adjustmentLabel: "",
-      finalPrice: current.finalPrice,
-    });
-    const res = await fetch("/api/admin/quote-log", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        entry: {
-          productId: "uv-acrylic-keyring",
-          input: {
-            label: "UV아크릴키링",
-            widthMm: current.width,
-            heightMm: current.height,
-            qty: current.qty,
-          },
-          salePolicyRevision: 0,
-          costLibraryRevision: 0,
-          marginPolicyRevision: 0,
-          presentedSupplyPrice: amounts.presentedSupplyPrice,
-          presentedVat: amounts.presentedVat,
-          presentedTotal: amounts.presentedTotal,
-          staffName,
-          customerName,
-        },
-      }),
-    });
-    setSaved(res.ok ? "이 조건의 견적 금액을 기록했습니다. 나중에 가격이 바뀌어도 이 기록은 바뀌지 않습니다." : "기록을 저장하지 못했습니다.");
-    } catch {
-      setSaved("기록을 저장하지 못했습니다.");
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-sm text-slate-600">공급가 {formatWon(snapshot.supplyTotal)} · 부가세 {formatWon(snapshot.vat)} · 최종 {formatWon(snapshot.finalPrice)}</p>
-      {snapshot.stale && <p className="mt-2 text-sm text-amber-800">규격이나 수량이 바뀌었습니다. 새 계산이 끝나기 전에는 기록할 수 없습니다.</p>}
-      <div className="mt-3 space-y-2">
-        <input className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base" placeholder="담당자" value={staffName} onChange={(e) => setStaffName(e.target.value)} />
-        <input className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base" placeholder="거래처 (선택)" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-      </div>
-      {role !== "admin" && <p className="mt-3 text-sm text-slate-500">금액은 바로 확인할 수 있습니다. 기록 저장은 관리자 로그인 후에 됩니다.</p>}
-      <button type="button" disabled={!canSave} className="mt-3 min-h-12 w-full rounded-xl bg-blue-700 py-3 font-semibold text-white disabled:bg-slate-300" onClick={() => void save()}>이 금액으로 기록</button>
-      {saved && (
-        <div className="mt-3 space-y-2 text-sm">
-          <p className="text-slate-600">{saved}</p>
-          <a className="block font-medium text-blue-700" href="/quotes">저장된 견적 보기</a>
-        </div>
-      )}
     </div>
   );
 }

@@ -29,6 +29,11 @@ export interface TshirtResult {
   vatAndTotal: VatAndTotal;
 }
 
+export function tshirtSizeError(qty: number, numberOf2XLPlus: number): string | null {
+  if (numberOf2XLPlus > qty) return "2XL 이상 수량은 총수량을 초과할 수 없습니다";
+  return null;
+}
+
 /** 할인율은 그 구간에 들어온 수량에만 적용한다. */
 export function tshirtPriceBands(unitPrice: number, qty: number, tiers: TshirtDiscountTier[]): TshirtPriceBand[] {
   const ordered = [...tiers].sort((a, b) => a.minQty - b.minQty);

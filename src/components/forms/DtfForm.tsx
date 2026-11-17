@@ -3,12 +3,14 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { calcDtf, combineDtfResults } from "@/lib/calc/dtf";
 import type { Settings } from "@/lib/config/types";
+import type { SaleRecordSnapshot } from "../SaleQuoteRecord";
 import type { SummaryPayload } from "../StickySummary";
 
 export interface DtfFormProps {
   settings: Settings;
   onReset: () => void;
   onSummaryChange?: (payload: SummaryPayload) => void;
+  onRecordChange?: (snapshot: SaleRecordSnapshot | null) => void;
   showCostReference?: boolean;
 }
 
@@ -28,7 +30,7 @@ function newItem(): DtfItemRow {
   };
 }
 
-export function DtfForm({ settings, onReset, onSummaryChange, showCostReference = false }: DtfFormProps) {
+export function DtfForm({ settings, onReset, onSummaryChange, onRecordChange, showCostReference = false }: DtfFormProps) {
   const [items, setItems] = useState<DtfItemRow[]>(() => [newItem()]);
 
   const addItem = useCallback(() => {
@@ -98,6 +100,28 @@ export function DtfForm({ settings, onReset, onSummaryChange, showCostReference 
       error: totalResult && !totalResult.ok ? totalResult.error : undefined,
     });
   }, [totalResult, summaryItems, onSummaryChange]);
+
+  useEffect(() => {
+    if (!totalResult?.ok) {
+      onRecordChange?.(null);
+      return;
+    }
+    const ready = items.filter((row) => Number(row.widthMm) > 0 && Number(row.heightMm) > 0 && Number(row.qty) >= 1);
+    const first = ready[0];
+    onRecordChange?.({
+      productId: "dtf",
+      label: ready.length > 1 ? `DTF ${ready.length}개 디자인` : "DTF",
+      supplyPrice: totalResult.supplyPrice,
+      vat: totalResult.vatAndTotal.vat,
+      total: totalResult.vatAndTotal.total,
+      qty: ready.reduce((sum, row) => sum + Number(row.qty), 0),
+      widthMm: first ? Number(first.widthMm) : undefined,
+      heightMm: first ? Number(first.heightMm) : undefined,
+      input: { spec: ready.map((row) => `${row.widthMm}×${row.heightMm}mm ${row.qty}장`).join(", ") },
+    });
+  }, [totalResult, items, onRecordChange]);
+
+  useEffect(() => () => onRecordChange?.(null), [onRecordChange]);
 
   return (
     <div className="space-y-4">

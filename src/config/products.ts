@@ -13,3 +13,7 @@ export const products = [
 ] as const;
 
 export type ProductId = (typeof products)[number]["id"];
+
+export function isLegacySaleProduct(productId: string): boolean {
+  return products.some((item) => item.id === productId);
+}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { calcPop, calcPopStandard } from "@/lib/calc/pop";
-import { calcTshirt } from "@/lib/calc/tshirt";
+import { calcTshirt, tshirtSizeError } from "@/lib/calc/tshirt";
+import { isLegacySaleProduct } from "@/config/products";
+import { saleRecordBody } from "@/components/SaleQuoteRecord";
 import { calculateQuote, uvRecordAmounts } from "@/lib/calc/uvAcrylicKeyring";
 import { getFileConfig } from "@/lib/config/fileConfig";
 import { currentLegacySale } from "@/lib/cost/legacySale";
@@ -32,6 +34,19 @@ describe("판매가 수정", () => {
     const custom = calcPop({ widthMm: 200, heightMm: 200, qty: 10 }, s);
     expect(custom.supply4Cut).toBe(126900);
     expect(custom.vatAndTotal4.total).toBe(139590);
+    const recorded = saleRecordBody({
+      productId: "pop",
+      label: "POP 4절",
+      supplyPrice: four.supplyPrice,
+      vat: four.vat,
+      total: four.total,
+      qty: 1,
+      input: { popCut: "4" },
+    }, "김담당", "");
+    expect(recorded.presentedSupplyPrice + recorded.presentedVat).toBe(recorded.presentedTotal);
+    expect(recorded.presentedTotal).toBe(25000);
+    expect(isLegacySaleProduct("uv-acrylic-keyring")).toBe(true);
+    expect(isLegacySaleProduct("cost-only")).toBe(false);
     const saved = currentLegacySale(config, recipe("pop"), { productId: "pop", qty: 1, popCut: "4" });
     expect(saved?.total).toBe(25000);
     expect((saved?.supplyPrice ?? 0) + (saved?.vat ?? 0)).toBe(saved?.total);
@@ -56,6 +71,8 @@ describe("판매가 수정", () => {
     expect(hundred.bands.map((band) => band.rate)).toEqual([0, 0.1, 0.2, 0.25]);
     expect(hundred.discountAmount).toBe(18000 * 100 - 1543500);
     for (let qty = 2; qty <= 120; qty += 1) expect(price(qty).supplyPrice).toBeGreaterThan(price(qty - 1).supplyPrice);
+    expect(tshirtSizeError(1, 2)).toBe("2XL 이상 수량은 총수량을 초과할 수 없습니다");
+    expect(tshirtSizeError(2, 2)).toBeNull();
   });
 
   it("UV 1개는 최종 6,000원이고 공급가와 부가세의 합도 6,000원이다", () => {

@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { calcStickerSolvent } from "@/lib/calc/stickerSolvent";
 import type { Settings } from "@/lib/config/types";
+import type { SaleRecordSnapshot } from "../SaleQuoteRecord";
 import type { SummaryPayload } from "../StickySummary";
 
 export interface StickerSolventFormProps {
@@ -10,9 +11,10 @@ export interface StickerSolventFormProps {
   defaultGapMm: number;
   onReset: () => void;
   onSummaryChange?: (payload: SummaryPayload) => void;
+  onRecordChange?: (snapshot: SaleRecordSnapshot | null) => void;
 }
 
-export function StickerSolventForm({ settings, defaultGapMm, onReset, onSummaryChange }: StickerSolventFormProps) {
+export function StickerSolventForm({ settings, defaultGapMm, onReset, onSummaryChange, onRecordChange }: StickerSolventFormProps) {
   const [widthMm, setWidthMm] = useState("");
   const [heightMm, setHeightMm] = useState("");
   const [qty, setQty] = useState("");
@@ -50,6 +52,26 @@ export function StickerSolventForm({ settings, defaultGapMm, onReset, onSummaryC
       error: failed ? result?.error : undefined,
     });
   }, [failed, result?.supplyPrice, result?.error, items, onSummaryChange]);
+
+  useEffect(() => {
+    if (!result || failed) {
+      onRecordChange?.(null);
+      return;
+    }
+    onRecordChange?.({
+      productId: "sticker-solvent",
+      label: "스티커 솔벤트",
+      supplyPrice: result.supplyPrice,
+      vat: result.vatAndTotal.vat,
+      total: result.vatAndTotal.total,
+      qty: Number(qty),
+      widthMm: Number(widthMm),
+      heightMm: Number(heightMm),
+      input: { gapMm: Number(gapMm) },
+    });
+  }, [result, failed, qty, widthMm, heightMm, gapMm, onRecordChange]);
+
+  useEffect(() => () => onRecordChange?.(null), [onRecordChange]);
 
   return (
     <div className="space-y-4">

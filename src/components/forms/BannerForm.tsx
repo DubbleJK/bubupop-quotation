@@ -3,15 +3,17 @@
 import { useState, useMemo, useEffect } from "react";
 import { calcBanner } from "@/lib/calc/banner";
 import type { Settings } from "@/lib/config/types";
+import type { SaleRecordSnapshot } from "../SaleQuoteRecord";
 import type { SummaryPayload } from "../StickySummary";
 
 export interface BannerFormProps {
   settings: Settings;
   onReset: () => void;
   onSummaryChange?: (payload: SummaryPayload) => void;
+  onRecordChange?: (snapshot: SaleRecordSnapshot | null) => void;
 }
 
-export function BannerForm({ settings, onReset, onSummaryChange }: BannerFormProps) {
+export function BannerForm({ settings, onReset, onSummaryChange, onRecordChange }: BannerFormProps) {
   const [outputQty, setOutputQty] = useState("");
   const [indoorStandQty, setIndoorStandQty] = useState("");
   const [outdoorStandQty, setOutdoorStandQty] = useState("");
@@ -49,6 +51,27 @@ export function BannerForm({ settings, onReset, onSummaryChange }: BannerFormPro
       items,
     });
   }, [result?.supplyPrice, items, onSummaryChange]);
+
+  useEffect(() => {
+    if (!result) {
+      onRecordChange?.(null);
+      return;
+    }
+    const output = Number(outputQty) || 0;
+    const indoor = Number(indoorStandQty) || 0;
+    const outdoor = Number(outdoorStandQty) || 0;
+    onRecordChange?.({
+      productId: "banner",
+      label: "배너",
+      supplyPrice: result.supplyPrice,
+      vat: result.vatAndTotal.vat,
+      total: result.vatAndTotal.total,
+      qty: output,
+      input: { indoorStandQty: indoor, outdoorStandQty: outdoor },
+    });
+  }, [result, outputQty, indoorStandQty, outdoorStandQty, onRecordChange]);
+
+  useEffect(() => () => onRecordChange?.(null), [onRecordChange]);
 
   const basePrice = settings.bannerBasePrice;
   const indoorPrice = settings.bannerStandIndoor;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { QuoteHeader } from "@/components/QuoteHeader";
+import { isLegacySaleProduct } from "@/config/products";
 import { formatSeoulMinute } from "@/lib/time/seoul";
 
 interface Entry {
@@ -171,8 +172,19 @@ export default function QuotesPage() {
                   <div>일시 {formatSeoulMinute(entry.createdAt)}</div>
                   <div>담당자 {entry.staffName || "기록 없음"}</div>
                   <div>거래처 {entry.customerName || "기록 없음"}</div>
-                  <div>규격 {entry.input?.widthMm ?? "—"}×{entry.input?.heightMm ?? "—"}mm</div>
+                  {entry.input?.widthMm != null && entry.input?.heightMm != null && <div>규격 {entry.input.widthMm}×{entry.input.heightMm}mm</div>}
+                  {entry.input?.popCut === "4" || entry.input?.popCut === "2" ? <div>규격 {entry.input.popCut}절</div> : null}
+                  {entry.input?.popCut === "custom" && <div>임의 규격 4절</div>}
+                  {entry.input?.sheet != null && <div>시트 {entry.input.sheet}</div>}
+                  {entry.input?.typeLabel != null && <div>종류 {entry.input.typeLabel}</div>}
+                  {entry.input?.numberOf2XLPlus != null && <div>2XL 이상 {entry.input.numberOf2XLPlus}벌</div>}
+                  {entry.input?.paperLabel != null && <div>용지 {entry.input.paperLabel}</div>}
+                  {entry.input?.designLabel != null && <div>디자인 {entry.input.designLabel}</div>}
                   <div>수량 {entry.input?.qty ?? "—"}</div>
+                  {entry.input?.indoorStandQty != null && <div>실내 거치대 {entry.input.indoorStandQty}</div>}
+                  {entry.input?.outdoorStandQty != null && <div>실외 거치대 {entry.input.outdoorStandQty}</div>}
+                  {entry.input?.spec != null && <div className="sm:col-span-2">{entry.input.spec}</div>}
+                  {entry.input?.otherSheet != null && <div className="sm:col-span-2">{entry.input.otherSheet}</div>}
                   <div className="sm:col-span-2 mt-2 font-medium text-slate-900">당시 견적</div>
                   <div>실제 제시 공급가 (VAT 별도) {won(entry.presentedSupplyPrice)}</div>
                   <div>부가세 {won(entry.presentedVat)}</div>
@@ -180,7 +192,11 @@ export default function QuotesPage() {
                   {role === "admin" && <div>당시 제작원가 {won(entry.internal?.supplyCost)}</div>}
                   {role === "admin" && <div>당시 추천 공급가 {won(entry.internal?.recommendedSupplyPrice ?? entry.internal?.targetSupplyPrice)}</div>}
                   <div className="sm:col-span-2">조정 사유 {entry.adjustmentReason || "기록 없음"}</div>
-                  {role === "admin" && <button type="button" className="mt-2 text-left font-medium text-blue-700" onClick={() => void requote(entry)}>지금 원가로 다시 계산</button>}
+                  {role === "admin" && (isLegacySaleProduct(entry.productId) ? (
+                    <p className="sm:col-span-2 mt-2 text-sm text-slate-500">이 견적은 판매가 계산으로 저장되어 원가로 다시 계산하지 않습니다. 저장된 금액은 그대로입니다.</p>
+                  ) : (
+                    <button type="button" className="mt-2 text-left font-medium text-blue-700" onClick={() => void requote(entry)}>지금 원가로 다시 계산</button>
+                  ))}
                   {recalc?.id === entry.id && (
                     <div className="sm:col-span-2 mt-2 rounded-xl bg-slate-50 p-3">
                       <p className="font-medium text-slate-900">현재 원가로 재계산</p>

@@ -3,15 +3,17 @@
 import { useState, useMemo, useEffect } from "react";
 import { calcPop, calcPopStandard, type PopStandardCut } from "@/lib/calc/pop";
 import type { Settings } from "@/lib/config/types";
+import type { SaleRecordSnapshot } from "../SaleQuoteRecord";
 import type { SummaryPayload } from "../StickySummary";
 
 export interface PopFormProps {
   settings: Settings;
   onReset: () => void;
   onSummaryChange?: (payload: SummaryPayload) => void;
+  onRecordChange?: (snapshot: SaleRecordSnapshot | null) => void;
 }
 
-export function PopForm({ settings, onReset, onSummaryChange }: PopFormProps) {
+export function PopForm({ settings, onReset, onSummaryChange, onRecordChange }: PopFormProps) {
   const [mode, setMode] = useState<"standard" | "custom">("standard");
   const [cut, setCut] = useState<PopStandardCut>("4");
   const [widthMm, setWidthMm] = useState("");
@@ -73,6 +75,38 @@ export function PopForm({ settings, onReset, onSummaryChange }: PopFormProps) {
       error: custom?.error,
     });
   }, [standard, custom, items, onSummaryChange]);
+
+  useEffect(() => {
+    if (standard) {
+      onRecordChange?.({
+        productId: "pop",
+        label: `POP ${standard.label}`,
+        supplyPrice: standard.supplyPrice,
+        vat: standard.vat,
+        total: standard.total,
+        qty: standard.qty,
+        input: { popCut: standard.cut },
+      });
+      return;
+    }
+    if (custom && !custom.error) {
+      onRecordChange?.({
+        productId: "pop",
+        label: "POP 임의 규격 4절",
+        supplyPrice: custom.supply4Cut,
+        vat: custom.vatAndTotal4.vat,
+        total: custom.vatAndTotal4.total,
+        qty: Number(qty),
+        widthMm: Number(widthMm),
+        heightMm: Number(heightMm),
+        input: { popCut: "custom" },
+      });
+      return;
+    }
+    onRecordChange?.(null);
+  }, [standard, custom, qty, widthMm, heightMm, onRecordChange]);
+
+  useEffect(() => () => onRecordChange?.(null), [onRecordChange]);
 
   return (
     <div className="space-y-4">

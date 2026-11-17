@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { calcTshirt } from "@/lib/calc/tshirt";
+import { calcTshirt, tshirtSizeError } from "@/lib/calc/tshirt";
 import type { Settings } from "@/lib/config/types";
 import type { TshirtTypeItem, TshirtDiscountTier } from "@/lib/config/types";
+import type { SaleRecordSnapshot } from "../SaleQuoteRecord";
 import type { SummaryPayload } from "../StickySummary";
 
 export interface TshirtFormProps {
@@ -13,6 +14,7 @@ export interface TshirtFormProps {
   tshirtDiscountTiers: TshirtDiscountTier[];
   onReset: () => void;
   onSummaryChange?: (payload: SummaryPayload) => void;
+  onRecordChange?: (snapshot: SaleRecordSnapshot | null) => void;
 }
 
 export function TshirtForm({
@@ -22,17 +24,23 @@ export function TshirtForm({
   tshirtDiscountTiers,
   onReset,
   onSummaryChange,
+  onRecordChange,
 }: TshirtFormProps) {
   const [typeId, setTypeId] = useState(tshirtTypes[0]?.id ?? "");
   const [qty, setQty] = useState("");
   const [numberOf2XLPlus, setNumberOf2XLPlus] = useState("");
 
   const typeItem = tshirtTypes.find((t) => t.id === typeId);
+  const qtyNumber = Number(qty);
+  const sizeNumber = numberOf2XLPlus === "" ? 0 : Number(numberOf2XLPlus);
+  const sizeError = qty !== "" && Number.isInteger(qtyNumber) && qtyNumber >= 1 && numberOf2XLPlus !== "" && Number.isInteger(sizeNumber)
+    ? tshirtSizeError(qtyNumber, sizeNumber)
+    : null;
   const result = useMemo(() => {
     const q = Number(qty);
-    const xl = Number(numberOf2XLPlus);
+    const xl = numberOf2XLPlus === "" ? 0 : Number(numberOf2XLPlus);
     if (!qty || isNaN(q) || q < 1) return null;
-    if (isNaN(xl) || xl < 0 || xl > q) return null;
+    if (isNaN(xl) || xl < 0 || tshirtSizeError(q, xl)) return null;
     return calcTshirt(
       { typeId, qty: q, numberOf2XLPlus: xl },
       settings,
@@ -67,8 +75,28 @@ export function TshirtForm({
       mainValue: result?.supplyPrice,
       mainLabel: "공급가 (VAT 미포함)",
       items,
+      error: sizeError ?? undefined,
     });
-  }, [result?.supplyPrice, items, onSummaryChange]);
+  }, [result?.supplyPrice, items, sizeError, onSummaryChange]);
+
+  useEffect(() => {
+    if (!result || sizeError) {
+      onRecordChange?.(null);
+      return;
+    }
+    const xl = numberOf2XLPlus === "" ? 0 : Number(numberOf2XLPlus);
+    onRecordChange?.({
+      productId: "tshirt",
+      label: `티셔츠 ${typeItem?.label ?? ""}`.trim(),
+      supplyPrice: result.supplyPrice,
+      vat: result.vatAndTotal.vat,
+      total: result.vatAndTotal.total,
+      qty: Number(qty),
+      input: { typeLabel: typeItem?.label ?? typeId, numberOf2XLPlus: xl },
+    });
+  }, [result, sizeError, qty, numberOf2XLPlus, typeId, typeItem?.label, onRecordChange]);
+
+  useEffect(() => () => onRecordChange?.(null), [onRecordChange]);
 
   return (
     <div className="space-y-4">
@@ -106,6 +134,7 @@ export function TshirtForm({
             onChange={(e) => setNumberOf2XLPlus(e.target.value)}
             className="w-full border border-slate-300 rounded-lg px-3 py-2"
           />
+          {sizeError && <p className="mt-1 text-sm text-red-600">{sizeError}</p>}
         </div>
       </div>
       <button

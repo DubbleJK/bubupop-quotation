@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { calcBusinessCard } from "@/lib/calc/businessCard";
 import type { Settings } from "@/lib/config/types";
 import type { BusinessCardOption, BusinessCardDesignTier } from "@/lib/config/types";
+import type { SaleRecordSnapshot } from "../SaleQuoteRecord";
 import type { SummaryPayload } from "../StickySummary";
 
 export interface BusinessCardFormProps {
@@ -12,6 +13,7 @@ export interface BusinessCardFormProps {
   businessCardDesignTiers: BusinessCardDesignTier[];
   onReset: () => void;
   onSummaryChange?: (payload: SummaryPayload) => void;
+  onRecordChange?: (snapshot: SaleRecordSnapshot | null) => void;
 }
 
 export function BusinessCardForm({
@@ -20,6 +22,7 @@ export function BusinessCardForm({
   businessCardDesignTiers,
   onReset,
   onSummaryChange,
+  onRecordChange,
 }: BusinessCardFormProps) {
   const [paperOptionId, setPaperOptionId] = useState(businessCardOptions[0]?.id ?? "");
   const [designTierId, setDesignTierId] = useState(businessCardDesignTiers[0]?.id ?? "");
@@ -74,6 +77,24 @@ export function BusinessCardForm({
       error: failed ? result?.error : undefined,
     });
   }, [failed, result?.supplyPrice, result?.error, items, onSummaryChange]);
+
+  useEffect(() => {
+    if (!result || failed) {
+      onRecordChange?.(null);
+      return;
+    }
+    onRecordChange?.({
+      productId: "business-card",
+      label: "명함",
+      supplyPrice: result.supplyPrice,
+      vat: result.vatAndTotal.vat,
+      total: result.vatAndTotal.total,
+      qty: typeof effectivePcs === "number" ? effectivePcs : 0,
+      input: { paperLabel: selectedOption?.label ?? paperOptionId, designLabel: businessCardDesignTiers.find((tier) => tier.id === designTierId)?.label ?? designTierId },
+    });
+  }, [result, failed, effectivePcs, selectedOption?.label, paperOptionId, designTierId, businessCardDesignTiers, onRecordChange]);
+
+  useEffect(() => () => onRecordChange?.(null), [onRecordChange]);
 
   return (
     <div className="space-y-4">
