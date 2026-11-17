@@ -7,7 +7,7 @@ import { StickySummary, type SummaryPayload } from "@/components/StickySummary";
 import { PopForm } from "@/components/forms/PopForm";
 import { StickerSheetForm } from "@/components/forms/StickerSheetForm";
 import { StickerSolventForm } from "@/components/forms/StickerSolventForm";
-import { UvAcrylicKeyringForm } from "@/components/forms/UvAcrylicKeyringForm";
+import { UvAcrylicKeyringForm, UvQuoteRecord, type UvRecordSnapshot } from "@/components/forms/UvAcrylicKeyringForm";
 import { DtfForm } from "@/components/forms/DtfForm";
 import { TshirtForm } from "@/components/forms/TshirtForm";
 import { BusinessCardForm } from "@/components/forms/BusinessCardForm";
@@ -38,6 +38,7 @@ export function QuoteScreen() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [uvRecord, setUvRecord] = useState<UvRecordSnapshot | null>(null);
 
   const onRole = useCallback((next: "admin" | "staff" | null) => setRole(next), []);
   const onClean = useCallback((next: boolean) => setClean(next), []);
@@ -84,8 +85,10 @@ export function QuoteScreen() {
   }, [reloadKey]);
 
   const onSummaryChange = useCallback((payload: SummaryPayload) => setSummary(payload), []);
+  const onUvRecord = useCallback((snapshot: UvRecordSnapshot | null) => setUvRecord(snapshot), []);
   const handleProductChange = useCallback((id: string) => {
     setSummary(emptySummary);
+    setUvRecord(null);
     setProductId(id);
     const url = new URL(window.location.href);
     url.searchParams.set("product", id);
@@ -175,7 +178,7 @@ export function QuoteScreen() {
                         {productId === "pop" && <PopForm settings={config.settings} onReset={() => resetQuote(true)} onSummaryChange={onSummaryChange} />}
                         {productId === "sticker-sheet" && <StickerSheetForm settings={config.settings} stickerRates={config.stickerRates} stickerSheetSizes={config.stickerSheetSizes} defaultGapMm={config.settings.defaultGapMm} onReset={() => resetQuote(true)} onSummaryChange={onSummaryChange} />}
                         {productId === "sticker-solvent" && <StickerSolventForm settings={config.settings} defaultGapMm={config.settings.defaultGapMm} onReset={() => resetQuote(true)} onSummaryChange={onSummaryChange} />}
-                        {productId === "uv-acrylic-keyring" && <UvAcrylicKeyringForm onReset={() => resetQuote(true)} onSummaryChange={onSummaryChange} />}
+                        {productId === "uv-acrylic-keyring" && <UvAcrylicKeyringForm onReset={() => resetQuote(true)} onSummaryChange={onSummaryChange} onRecordChange={onUvRecord} />}
                         {productId === "dtf" && <DtfForm settings={config.settings} showCostReference={role === "admin"} onReset={() => resetQuote(true)} onSummaryChange={onSummaryChange} />}
                         {productId === "tshirt" && <TshirtForm settings={config.settings} tshirtTypes={config.tshirtTypes} tshirtSizeUpPer2XL={config.tshirtSizeUpPer2XL} tshirtDiscountTiers={config.tshirtDiscountTiers} onReset={() => resetQuote(true)} onSummaryChange={onSummaryChange} />}
                         {productId === "business-card" && <BusinessCardForm settings={config.settings} businessCardOptions={config.businessCardOptions} businessCardDesignTiers={config.businessCardDesignTiers} onReset={() => resetQuote(true)} onSummaryChange={onSummaryChange} />}
@@ -186,6 +189,7 @@ export function QuoteScreen() {
                   {legacy ? (
                     <aside id="quote-result" className="lg:sticky lg:top-4">
                       <StickySummary mainValue={summary.mainValue} mainLabel={summary.mainLabel} items={summary.items} error={summary.error} />
+                      {productId === "uv-acrylic-keyring" && <UvQuoteRecord role={role} snapshot={uvRecord} />}
                     </aside>
                   ) : view.result}
                 </div>

@@ -118,6 +118,19 @@ export function getAdjustedFinalPrice(baseTotal: number, qty: number): number {
 
 const SINGLE_INCLUDED_TOTAL = 6000;
 
+/** 화면에 나온 공급가·부가세·최종액을 그대로 기록한다. 부가세를 다시 계산하지 않는다. */
+export function uvRecordAmounts(quote: UvAcrylicKeyringQuote): {
+  presentedSupplyPrice: number;
+  presentedVat: number;
+  presentedTotal: number;
+} {
+  return {
+    presentedSupplyPrice: quote.supplyTotal,
+    presentedVat: quote.vat,
+    presentedTotal: quote.finalPrice,
+  };
+}
+
 export function calculateQuote(input: UvAcrylicKeyringInput): UvAcrylicKeyringQuote {
   const area = getArea(input.width, input.height);
   if (input.qty === 1) {

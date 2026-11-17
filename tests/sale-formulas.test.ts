@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calcPop, calcPopStandard } from "@/lib/calc/pop";
 import { calcTshirt } from "@/lib/calc/tshirt";
-import { calculateQuote } from "@/lib/calc/uvAcrylicKeyring";
+import { calculateQuote, uvRecordAmounts } from "@/lib/calc/uvAcrylicKeyring";
 import { getFileConfig } from "@/lib/config/fileConfig";
 import { currentLegacySale } from "@/lib/cost/legacySale";
 import type { LegacyQuoteId, ProductRecipe } from "@/lib/cost/types";
@@ -67,6 +67,11 @@ describe("판매가 수정", () => {
     expect(small.finalPrice).toBe(6000);
     expect(calculateQuote({ width: 45, height: 30, qty: 2 }).finalPrice).toBe(4562);
     expect(calculateQuote({ width: 45, height: 30, qty: 100 }).finalPrice).toBe(154193);
+    const recorded = uvRecordAmounts(quote);
+    expect(recorded).toEqual({ presentedSupplyPrice: 5450, presentedVat: 550, presentedTotal: 6000 });
+    const bulk = uvRecordAmounts(calculateQuote({ width: 45, height: 30, qty: 2 }));
+    expect(bulk.presentedTotal).toBe(4562);
+    expect(bulk.presentedVat).toBe(calculateQuote({ width: 45, height: 30, qty: 2 }).vat);
     const saved = currentLegacySale(config, recipe("uv-acrylic-keyring"), { productId: "uv-acrylic-keyring", qty: 1, widthMm: 40, heightMm: 40 });
     expect(saved?.finalPrice).toBe(6000);
     expect((saved?.supplyPrice ?? 0) + (saved?.vat ?? 0)).toBe(6000);
