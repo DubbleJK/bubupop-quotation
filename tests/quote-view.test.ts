@@ -47,6 +47,25 @@ describe("역할별 견적 응답", () => {
     expect(JSON.stringify(staff)).not.toContain("10140");
   });
 
+  it("시트 용지 장수와 롤 출력 길이는 남기고 원가는 빼다", () => {
+    const staff = quoteCalculationForRole({
+      ...full,
+      result: {
+        ...full.result,
+        lines: [
+          { kind: "material", name: "아트지/모조지(a4)", layoutQty: 25, layoutUnit: "장", supplyCost: 2275 },
+          { kind: "material", name: "DTF필름", layoutQty: 1.25, layoutUnit: "m", supplyCost: 1765 },
+          { kind: "process", name: "커팅", layoutQty: 25, layoutUnit: "장", supplyCost: 200 },
+        ],
+      },
+    }, "staff");
+    expect(staff.result.usage?.map((row) => row.text)).toEqual(["아트지/모조지(a4) 25장", "DTF필름 1.25m 출력"]);
+    const json = JSON.stringify(staff);
+    expect(json).not.toContain("supplyCost");
+    expect(json).not.toContain("2275");
+    expect(json).not.toContain("1765");
+  });
+
   it("관리자 응답은 원가 분석을 유지한다", () => {
     expect(quoteCalculationForRole(full, "admin").result.supplyCost).toBe(20773);
     expect(quoteCalculationForRole(full, "admin").result.lines).toHaveLength(1);

@@ -34,6 +34,7 @@ export default function QuotesPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [recalc, setRecalc] = useState<{ id: string; state: "loading" | "done" | "error"; cost?: number; recommended?: number; margin?: number; message?: string } | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
 
   const load = async () => {
     const session = await fetch("/api/admin/session");
@@ -57,6 +58,13 @@ export default function QuotesPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  const logout = async () => {
+    await fetch("/api/admin/logout", { method: "POST" });
+    setRole(null);
+    setAuthed(false);
+    setEntries([]);
+  };
 
   const login = async (event: FormEvent) => {
     event.preventDefault();
@@ -115,8 +123,15 @@ export default function QuotesPage() {
 
   return (
     <main className="min-h-screen bg-slate-100">
-      <QuoteHeader current="quotes" role={role} />
+      <QuoteHeader current="quotes" role={role} onLogin={role !== "admin" ? () => setLoginOpen(true) : undefined} onLogout={() => void logout()} />
       <div className="mx-auto max-w-3xl p-4 md:p-8">
+        {loginOpen && role !== "admin" && (
+          <form onSubmit={login} className="mb-4 rounded-2xl bg-white p-4">
+            <p className="text-sm font-medium text-slate-800">관리자 PIN으로 다시 로그인</p>
+            <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} className="mt-3 w-full rounded-xl border px-3 py-3" placeholder="PIN" />
+            <button className="mt-3 rounded-xl bg-slate-800 px-4 py-2 text-sm text-white">로그인</button>
+          </form>
+        )}
         <h1 className="text-2xl font-semibold text-slate-900">견적 기록</h1>
         <p className="mt-1 text-sm text-slate-500">저장된 금액은 당시 계산입니다. 다시 계산해도 원본은 바뀌지 않습니다.</p>
         <ul className="mt-4 space-y-3">

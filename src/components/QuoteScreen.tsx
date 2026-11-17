@@ -113,13 +113,15 @@ export function QuoteScreen() {
       setLoginError(res.status === 503 ? "서버 세션 설정을 확인하지 못했습니다." : "PIN이 올바르지 않습니다.");
       return;
     }
-    const next = data.role === "staff" ? "staff" : "admin";
-    setRole(next);
+    setRole("admin");
     setPin("");
     setLoginOpen(false);
-    if (next === "admin" && event.currentTarget instanceof HTMLFormElement && event.currentTarget.dataset.destination === "admin") {
-      window.location.href = "/admin";
-    }
+  };
+
+  const logout = async () => {
+    await fetch("/api/admin/logout", { method: "POST" });
+    setRole(null);
+    setLoginOpen(false);
   };
 
   const config: AppConfig | null = resolution?.ready ? resolution.config : null;
@@ -127,12 +129,12 @@ export function QuoteScreen() {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <QuoteHeader current="quote" role={role} onNewQuote={() => resetQuote(false)} onLogin={role == null ? () => setLoginOpen(true) : undefined} />
+      <QuoteHeader current="quote" role={role} onNewQuote={() => resetQuote(false)} onLogin={role !== "admin" ? () => setLoginOpen(true) : undefined} onLogout={role ? () => void logout() : undefined} />
       <main className="mx-auto max-w-6xl p-3 md:p-5">
-        {loginOpen && role == null && (
-          <form onSubmit={login} data-destination="admin" className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-sm font-medium text-slate-800">PIN 로그인</p>
-            <p className="mt-1 text-sm text-slate-500">관리자 PIN은 설정 화면으로 이동합니다. 직원 PIN은 이 견적 화면에 남습니다.</p>
+        {loginOpen && role !== "admin" && (
+          <form onSubmit={login} className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-sm font-medium text-slate-800">관리자 로그인</p>
+            <p className="mt-1 text-sm text-slate-500">관리자 PIN을 입력하면 이 화면에서 원가와 견적 기록이 열립니다.</p>
             <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} className="mt-3 w-full max-w-xs rounded-xl border border-slate-300 px-3 py-3 text-lg" placeholder="PIN" />
             {loginError && <p className="mt-2 text-sm text-red-600">{loginError}</p>}
             <div className="mt-3 flex gap-2">

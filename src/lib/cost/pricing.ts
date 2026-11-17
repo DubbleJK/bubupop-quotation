@@ -23,6 +23,9 @@ export interface CostLine {
   kind: "material" | "process";
   usageQty?: number;
   unitLabel?: string;
+  /** 원가와 별개로, 실제로 출력하는 장수 또는 미터. */
+  layoutQty?: number;
+  layoutUnit?: string;
   grossAmount?: number;
   supplyCost?: number;
   variableCost?: number;
@@ -448,6 +451,8 @@ export function simulatePricing(
         kind: "material",
         usageQty: shareSheet ? billedQty : measured.value,
         unitLabel: line.usage === "per-piece" ? fixedUnit : measured.unitLabel,
+        layoutQty: measured.value,
+        layoutUnit: measured.unitLabel,
         grossAmount: cost.gross,
         supplyCost: cost.supply,
         variableCost: once ? 0 : cost.supply,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { configProvider } from "@/lib/config";
@@ -25,11 +25,11 @@ interface SaveResult {
  * 로그인 세션은 서버 쿠키로 확인하고, 견적 설정은 서버 저장이 성공한 뒤에만 반영한다.
  */
 const ADMIN_TABS: { id: CostTab | "sale"; label: string }[] = [
-  { id: "materials", label: "1. 원자재 관리" },
-  { id: "processes", label: "2. 제작 공정 관리" },
-  { id: "products", label: "3. 판매 품목 관리" },
-  { id: "quote", label: "4. 견적 작성" },
-  { id: "history", label: "5. 견적 기록" },
+  { id: "materials", label: "원자재" },
+  { id: "processes", label: "공정" },
+  { id: "products", label: "품목" },
+  { id: "quote", label: "견적" },
+  { id: "history", label: "기록" },
 ];
 
 export default function AdminPage() {
@@ -42,8 +42,7 @@ export default function AdminPage() {
   const onCostDraft = useCallback((state: { dirty: boolean; source: string }) => setCostDraft(state), []);
   const [defaultSaved, setDefaultSaved] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [staffNote, setStaffNote] = useState("");
-  const [staffPin, setStaffPin] = useState("");
+  const [adminPin, setAdminPin] = useState("");
   const [blocked, setBlocked] = useState("");
 
   useEffect(() => {
@@ -62,13 +61,8 @@ export default function AdminPage() {
       }
       const sessionBody = (await session.json()) as { role?: string };
       if (sessionBody.role === "staff") {
-        if (!cancelled) setBlocked("직원 권한으로는 원자재, 공정, 판매 설정을 바꿀 수 없습니다.");
+        if (!cancelled) setBlocked("직원 로그인으로는 설정을 열 수 없습니다. 관리자 PIN으로 다시 로그인하세요.");
         return;
-      }
-      const staff = await fetch("/api/admin/staff-pin");
-      if (staff.ok) {
-        const staffBody = (await staff.json()) as { configured?: boolean };
-        if (!cancelled) setStaffNote(staffBody.configured ? "직원 PIN이 저장되어 있습니다. 값은 표시하지 않습니다." : "직원 PIN이 아직 없습니다. 관리자가 직접 입력해 저장하면 견적 전용 로그인이 분리됩니다.");
       }
       const res = await fetch("/api/admin/config");
       if (!res.ok) {
@@ -229,28 +223,30 @@ export default function AdminPage() {
     setEditing({ ...editing, businessCardDesignTiers: next });
   };
 
-  const saveStaffPin = async () => {
-    const res = await fetch("/api/admin/staff-pin", {
-      method: "PUT",
+  const loginAsAdmin = async (event: FormEvent) => {
+    event.preventDefault();
+    const res = await fetch("/api/admin/login", {
+      method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ pin: staffPin }),
+      body: JSON.stringify({ pin: adminPin }),
     });
     if (!res.ok) {
-      setStaffNote("직원 PIN을 저장하지 못했습니다. 4자리부터 8자리 숫자만 저장합니다.");
+      setBlocked("PIN이 올바르지 않습니다. 관리자 PIN으로 다시 입력하세요.");
       return;
     }
-    setStaffPin("");
-    setStaffNote("직원 PIN을 저장했습니다. 그 PIN은 견적 계산과 저장만 할 수 있고, 원가는 바꿀 수 없습니다.");
+    window.location.reload();
   };
 
   if (blocked) {
     return (
       <main className="min-h-screen bg-slate-100 p-6">
-        <div className="mx-auto max-w-lg rounded-2xl bg-white p-6">
+        <form onSubmit={loginAsAdmin} className="mx-auto max-w-lg rounded-2xl bg-white p-6">
           <h1 className="text-lg font-semibold text-slate-900">관리자 설정</h1>
           <p className="mt-2 text-sm text-slate-700">{blocked}</p>
-          <a className="mt-4 inline-block font-medium text-blue-700" href="/quotes">견적 기록으로 이동</a>
-        </div>
+          <input type="password" inputMode="numeric" value={adminPin} onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, "").slice(0, 8))} className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-3" placeholder="관리자 PIN" />
+          <button type="submit" className="mt-3 w-full rounded-xl bg-slate-800 py-3 text-sm font-semibold text-white">관리자 로그인</button>
+          <button type="button" className="mt-3 text-sm text-slate-600" onClick={() => void fetch("/api/admin/logout", { method: "POST" }).then(() => router.replace("/"))}>로그아웃</button>
+        </form>
       </main>
     );
   }
@@ -333,17 +329,6 @@ export default function AdminPage() {
           : "설정을 불러오는 중입니다."}
         {saveResult ? ` · 마지막 저장: ${saveResult.text}` : ""}
       </p>
-      <section className="mx-auto max-w-3xl px-4 pt-4">
-        <details className="rounded-xl border border-slate-200 bg-white p-4">
-          <summary className="cursor-pointer text-sm font-medium text-slate-800">직원 PIN</summary>
-          <p className="mt-2 text-sm text-slate-600">{staffNote || "직원 PIN 상태를 확인하는 중입니다."}</p>
-          <p className="mt-1 text-xs text-slate-500">기존 관리자 PIN은 그대로 전체 권한을 유지합니다. 새 PIN은 여기에 직접 입력할 때만 저장됩니다.</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <input className="rounded-lg border border-slate-300 px-3 py-2" inputMode="numeric" type="password" placeholder="4~8자리" value={staffPin} onChange={(e) => setStaffPin(e.target.value.replace(/\D/g, "").slice(0, 8))} />
-            <button type="button" className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-white" onClick={() => void saveStaffPin()}>직원 PIN 저장</button>
-          </div>
-        </details>
-      </section>
       <CostWorkspace tab={tab} onDraftState={onCostDraft} />
       <details className={`max-w-3xl mx-auto px-4 pb-10 ${tab === "products" ? "" : "hidden"}`}>
         <summary className="cursor-pointer py-3 text-sm text-slate-700">기존 고객 8개 화면 가격. 새 견적으로 바꾸기 전까지 고객 화면용으로만 둡니다. 새 추천가와 맞추지 않습니다.</summary>

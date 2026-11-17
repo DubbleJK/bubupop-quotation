@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { calcVatAndTotal } from "@/lib/calc/common";
 
 interface QuoteLine {
@@ -28,6 +28,7 @@ interface QuotePayload {
     vatRate: number;
     lines?: QuoteLine[];
     costLibraryRevision?: number;
+    usage?: { name: string; text: string }[];
   };
 }
 
@@ -67,7 +68,6 @@ export function StaffCostQuote({
   active,
   restoreReady,
   resetToken,
-  onRole,
   onCleanChange,
   onNewQuote,
   children,
@@ -82,8 +82,6 @@ export function StaffCostQuote({
   onNewQuote: () => void;
   children: (view: { fields: ReactNode; result: ReactNode; confirmSwitch: () => boolean; clean: boolean }) => ReactNode;
 }) {
-  const [pin, setPin] = useState("");
-  const [loginError, setLoginError] = useState("");
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [qty, setQty] = useState("1");
@@ -165,7 +163,7 @@ export function StaffCostQuote({
   }, [resetToken]);
 
   useEffect(() => {
-    if (!active || !role) return;
+    if (!active) return;
     const handle = window.setTimeout(() => {
       void fetch("/api/quote/calculate", {
         method: "POST",
@@ -180,10 +178,6 @@ export function StaffCostQuote({
           },
         }),
       }).then(async (res) => {
-        if (res.status === 401) {
-          onRole(null);
-          return;
-        }
         const data = (await res.json()) as QuotePayload & { error?: string };
         if (!res.ok) {
           setError("견적을 계산하지 못했습니다.");
@@ -195,24 +189,7 @@ export function StaffCostQuote({
       }).catch(() => setError("견적을 계산하지 못했습니다."));
     }, 300);
     return () => window.clearTimeout(handle);
-  }, [active, role, productId, qty, width, height, gap, manual, onRole]);
-
-  const login = async (event: FormEvent) => {
-    event.preventDefault();
-    const res = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ pin }),
-    });
-    const data = (await res.json().catch(() => ({}))) as { role?: string };
-    if (!res.ok) {
-      setLoginError("로그인에 실패했습니다.");
-      return;
-    }
-    setPin("");
-    setLoginError("");
-    onRole(data.role === "staff" ? "staff" : "admin");
-  };
+  }, [active, productId, qty, width, height, gap, manual]);
 
   const result = payload?.result;
   const needsSize = payload?.fields.width !== false;
@@ -229,7 +206,7 @@ export function StaffCostQuote({
   const vat = Number.isFinite(offeredPrice) ? calcVatAndTotal(offeredPrice, result?.vatRate ?? 0.1) : undefined;
   const margin = result?.supplyCost != null && offeredPrice > 0 ? (offeredPrice - result.supplyCost) / offeredPrice : undefined;
   const admin = role === "admin";
-  const canSave = Boolean(role) && inputsReady && (payload?.stage === "ready" || payload?.stage === "review") && priceOk && (result?.missing.length ?? 0) === 0;
+  const canSave = role === "admin" && inputsReady && (payload?.stage === "ready" || payload?.stage === "review") && priceOk && (result?.missing.length ?? 0) === 0;
 
   const save = async () => {
     if (!result || !canSave || recommended == null) return;
@@ -282,19 +259,12 @@ export function StaffCostQuote({
     </div>
   ) : null;
 
-  const resultPanel = !active ? null : role == null ? (
-    <form id="quote-result" onSubmit={login} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-900">견적 로그인</h2>
-      <p className="mt-1 text-sm text-slate-500">직원 PIN은 견적만 열리고, 관리자 PIN은 원가 분석도 열립니다.</p>
-      <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-3 text-lg" placeholder="PIN" />
-      {loginError && <p className="mt-2 text-sm text-red-600">{loginError}</p>}
-      <button type="submit" className="mt-4 w-full rounded-xl bg-blue-700 py-3 font-semibold text-white">로그인</button>
-    </form>
-  ) : (
+  const resultPanel = !active ? null : (
     <aside id="quote-result" className="rounded-2xl border border-blue-200 bg-white p-5 shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
       <p className="text-sm font-medium text-slate-500">{payload?.label ?? "견적 결과"} {payload ? `· ${payload.stageLabel}` : ""}</p>
       <p className="mt-2 text-sm text-slate-500">최종 추천 공급가 (VAT 별도)</p>
       <p className="text-4xl font-semibold tracking-tight text-slate-950">{inputsReady ? won(recommended) : "—"}</p>
+      {inputsReady && (result?.usage ?? []).map((row) => <p key={row.text} className="mt-1 text-sm text-slate-700">{row.text}</p>)}
       {inputsReady && minimumApplied && <p className="mt-1 text-sm font-medium text-blue-800">최소 판매 기준을 적용했습니다.</p>}
       <label className="mt-4 block text-sm font-medium text-slate-800">실제 공급가 (VAT 별도)
         <input className="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-3 text-2xl text-slate-900" inputMode="numeric" value={offered ? Number(offered).toLocaleString("ko-KR") : ""} onChange={(e) => { setOffered(e.target.value.replace(/[^\d]/g, "")); setManual(true); setManualSpec(specKey); setConfirmedKey(""); touch(); }} />
@@ -313,6 +283,7 @@ export function StaffCostQuote({
         <input className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base" placeholder="거래처 (선택)" value={customerName} onChange={(e) => { setCustomerName(e.target.value); touch(); }} />
         <input className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base" placeholder="가격 조정 사유" value={reason} onChange={(e) => { setReason(e.target.value); touch(); }} />
       </div>
+      {role !== "admin" && <p className="mt-4 text-sm text-slate-500">금액은 바로 확인할 수 있습니다. 기록 저장은 관리자 로그인 후에 됩니다.</p>}
       <button type="button" disabled={!canSave} className="mt-4 min-h-12 w-full rounded-xl bg-blue-700 py-3 font-semibold text-white disabled:bg-slate-300" onClick={() => void save()}>이 금액으로 기록</button>
       {saved && (
         <div className="mt-3 space-y-2 text-sm">

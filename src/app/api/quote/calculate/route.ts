@@ -9,12 +9,9 @@ import { quoteCalculationForRole } from "@/lib/cost/quoteView";
 import { ADMIN_COOKIE_NAME, readSession } from "@/server/adminSession";
 import { readKvConfig } from "@/server/kvConfig";
 import { readCostLibrary } from "@/server/kvCostLibrary";
-import { requireQuoteAccess } from "@/server/requireAdmin";
 
-/** 직원 견적. 서버에 저장된 원가만 쓰고, 원가 라이브러리 자체는 돌려주지 않는다. */
+/** 견적 금액과 용지 사용량. 원가 내역은 관리자 세션에만 포함한다. */
 export async function POST(request: NextRequest) {
-  const denied = requireQuoteAccess(request);
-  if (denied) return denied;
   const role = readSession(request.cookies.get(ADMIN_COOKIE_NAME)?.value)?.role === "admin" ? "admin" : "staff";
   let input: SimulationInput | undefined;
   try {
@@ -51,7 +48,7 @@ export async function POST(request: NextRequest) {
       productMinimumSupply: result.productMinimumSupply,
       recommendedSupplyPrice: result.recommendedSupplyPrice,
       vatRate: result.vatRateUsed,
-      lines: result.lines.map((line) => ({ name: line.name, kind: line.kind, supplyCost: line.supplyCost, usageQty: line.usageQty, unitLabel: line.unitLabel, reason: line.reason, usageNote: line.usageNote })),
+      lines: result.lines.map((line) => ({ name: line.name, kind: line.kind, supplyCost: line.supplyCost, usageQty: line.usageQty, unitLabel: line.unitLabel, layoutQty: line.layoutQty, layoutUnit: line.layoutUnit, reason: line.reason, usageNote: line.usageNote })),
       costLibraryRevision: result.costLibraryRevision,
     },
   }, role));

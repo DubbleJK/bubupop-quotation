@@ -225,7 +225,7 @@ export function CostWorkspace({
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-4">
       <div className={`text-sm rounded-lg px-3 py-2 border ${source === "server" && !dirty ? "bg-white border-slate-200 text-slate-700" : "bg-amber-50 border-amber-200 text-amber-950"}`}>
-        <p>원자재와 제작 공정을 먼저 등록하고, 판매 품목에 붙인 뒤 견적을 작성합니다. 여기서 만든 견적은 고객 화면 가격을 자동으로 바꾸지 않습니다.</p>
+        <p>원자재와 공정을 품목에 붙입니다. 저장하기 전에는 서버에 반영되지 않습니다.</p>
         <p className="mt-1">{storageText}</p>
         <p className="mt-1 font-medium">{serverSaved ? "저장 상태: 운영 서버에 저장됨" : devSaved ? "저장 상태: 개발 서버에 저장됨" : "저장 상태: 운영 서버에 저장되지 않음"}</p>
         {message && <p className="mt-1">{message}</p>}
@@ -1053,6 +1053,59 @@ function ProductGroups({
   );
 }
 
+function GroupBoard({
+  library,
+  setLibrary,
+  onSelect,
+}: {
+  library: CostLibrary;
+  setLibrary: (next: CostLibrary) => void;
+  onSelect: (productId: string) => void;
+}) {
+  const [dragId, setDragId] = useState<string | null>(null);
+  const groups = [...(library.groups ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  const known = new Set(groups.map((group) => group.id));
+  const columns = [...groups.map((group) => ({ id: group.id, label: group.label })), { id: "", label: "그룹 없음" }];
+  const move = (productId: string, groupId: string) => {
+    setLibrary({
+      ...library,
+      recipes: library.recipes.map((row) => (row.productId === productId ? { ...row, groupId: groupId || undefined } : row)),
+    });
+    setDragId(null);
+  };
+  return (
+    <div>
+      <p className="text-sm text-slate-600">품목을 끌어 그룹을 바꿉니다. 아래 저장을 눌러야 서버에 남습니다.</p>
+      <div className="mt-2 grid gap-3 md:grid-cols-2">
+        {columns.map((column) => (
+          <div
+            key={column.id || "none"}
+            className="min-h-24 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={() => { if (dragId) move(dragId, column.id); }}
+          >
+            <p className="text-sm font-medium text-slate-800">{column.label}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {library.recipes.filter((row) => (column.id === "" ? !known.has(row.groupId ?? "") : row.groupId === column.id)).map((row) => (
+                <button
+                  key={row.productId}
+                  type="button"
+                  draggable
+                  onDragStart={() => setDragId(row.productId)}
+                  onClick={() => onSelect(row.productId)}
+                  className="cursor-grab rounded-full border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                >
+                  {row.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProductsPanel({
   library,
   setLibrary,
@@ -1097,8 +1150,9 @@ function ProductsPanel({
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-slate-800">3. 판매 품목 관리</h2>
-      <p className="text-sm text-slate-600">원자재와 공정을 품목에 붙입니다. 포장이나 양면처럼 고를 때만 쓰는 항목은 옵션에 연결하세요. 양면이라고 자동으로 두 배가 되지는 않습니다.</p>
+      <h2 className="text-sm font-semibold text-slate-800">품목</h2>
+      <p className="text-sm text-slate-600">품목을 눌러 재료와 공정을 붙입니다. 끌어다 놓으면 그룹만 바뀝니다.</p>
+      <GroupBoard library={library} setLibrary={setLibrary} onSelect={setSelected} />
       <ProductGroups library={library} setLibrary={setLibrary} />
       <div className="flex flex-wrap gap-2">
         <input className={fieldClass} placeholder="새 품목 이름" value={name} onChange={(e) => setName(e.target.value)} />
@@ -1190,7 +1244,7 @@ function ProductsPanel({
             <p>상태 {quoteStageLabel(quoteStage(library, recipe))}</p>
             <p>최소 판매금액 {recipe.minimumSupplyPrice == null ? "없음" : `${recipe.minimumSupplyPrice.toLocaleString("ko-KR")}원`}</p>
             <p>그룹 {(library.groups ?? []).find((group) => group.id === recipe.groupId)?.label ?? "그룹 없음"}</p>
-            <p>직원 화면 {isListedOnCustomerHome(recipe) ? "표시" : "숨김"}</p>
+            <p>견적 화면 {isListedOnCustomerHome(recipe) ? "표시" : "숨김"}</p>
             <p className="sm:col-span-2">연결 {recipe.lines.filter((line) => line.kind === "material").length}개 원자재 · {recipe.lines.filter((line) => line.kind === "process").length}개 공정</p>
             {recipeIssues(library, recipe).map((issue) => <p key={issue} className="sm:col-span-2 text-amber-800">{issue}</p>)}
           </div>
@@ -1313,12 +1367,12 @@ function ProductsPanel({
               disabled={customerQuoteBlockReason(recipe) != null}
               onChange={(e) => patchRecipe({ customerVisible: e.target.checked, staffHidden: !e.target.checked })}
             />
-            직원 견적 화면에 표시
+            견적 화면에 표시
           </label>
           {customerQuoteBlockReason(recipe) ? (
             <p className="text-xs text-amber-800">{customerQuoteBlockReason(recipe)}</p>
           ) : (
-            <p className="text-xs text-slate-500">숨기면 직원 견적 목록에서 빠집니다. 기존 8개 계산식과 판매단가는 바뀌지 않습니다. 다른 기기는 저장한 뒤에 같아집니다.</p>
+            <p className="text-xs text-slate-500">끄면 견적 목록에서 빠집니다. 계산식과 판매단가는 그대로입니다.</p>
           )}
           {library.recipes.some((row) => row.productId !== recipe.productId && row.label.trim() !== "" && row.label.trim() === recipe.label.trim() && isListedOnCustomerHome(row) && isListedOnCustomerHome(recipe)) && (
             <p className="text-xs text-amber-800">같은 이름의 품목이 고객 화면에 이미 있습니다. 둘 다 보이면 손님에게 같은 메뉴가 두 번 나옵니다.</p>
@@ -1326,7 +1380,7 @@ function ProductsPanel({
         </article>
       )}
       <section className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-slate-800">직원 견적 화면 미리보기</h3>
+        <h3 className="text-sm font-semibold text-slate-800">견적 화면 미리보기</h3>
         <p className="text-xs text-slate-500">지금 화면의 공개 품목만 보여 줍니다. 다른 기기에는 서버에 저장한 뒤에 반영됩니다. 매입가와 이익률은 이 목록에 없습니다.</p>
         <CustomerMenuList catalog={buildPublicCatalog(library)} />
       </section>
