@@ -204,6 +204,15 @@ export function assertLibraryKeepsUsedRows(
   return null;
 }
 
+/** 품목과 그 품목의 이익률만 뺀다. 원자재와 공정은 남긴다. */
+export function removeRecipe(library: CostLibrary, productId: string): CostLibrary {
+  return {
+    ...library,
+    recipes: library.recipes.filter((row) => row.productId !== productId),
+    margins: library.margins.filter((row) => row.productId !== productId),
+  };
+}
+
 /** 품목을 복제한다. 고객 화면 연결과 승인 가격은 따라가지 않는다. */
 export function duplicateRecipe(library: CostLibrary, productId: string): CostLibrary | null {
   const source = library.recipes.find((row) => row.productId === productId);

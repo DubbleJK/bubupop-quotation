@@ -4,7 +4,7 @@ import { calcPop } from "@/lib/calc/pop";
 import { calculateQuote } from "@/lib/calc/uvAcrylicKeyring";
 import { getFileConfig } from "@/lib/config/fileConfig";
 import { toPublicConfig } from "@/lib/config/publicConfig";
-import { emptyCostLibrary, removeMaterial, removeProcess } from "@/lib/cost/library";
+import { emptyCostLibrary, removeMaterial, removeProcess, removeRecipe } from "@/lib/cost/library";
 import { DEFAULT_TARGET_RATE, approveRecordedPrice, recommendSupply, simulatePricing } from "@/lib/cost/pricing";
 import { scanDisplayedDrops } from "@/lib/cost/legacySale";
 import type { CostLibrary, MaterialCost, ProcessDef, RecipeLine } from "@/lib/cost/types";
@@ -137,6 +137,16 @@ describe("원가 라이브러리", () => {
     ];
     const result = simulatePricing(library, config, { productId: "pop", qty: 2, widthMm: 10, heightMm: 10 }, asOf);
     expect(result.supplyCost).toBe(4000);
+  });
+
+  it("품목을 삭제해도 원자재와 다른 품목은 남는다", () => {
+    const library = emptyCostLibrary();
+    const before = library.materials.length;
+    const next = removeRecipe(library, "pop");
+    expect(next.recipes.some((row) => row.productId === "pop")).toBe(false);
+    expect(next.recipes.some((row) => row.productId === "dtf")).toBe(true);
+    expect(next.margins.some((row) => row.productId === "pop")).toBe(false);
+    expect(next.materials).toHaveLength(before);
   });
 
   it("사용 중인 원자재 삭제는 실패하고 비활성화는 된다", () => {

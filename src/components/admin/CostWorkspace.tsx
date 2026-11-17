@@ -8,6 +8,7 @@ import {
   blankAmount,
   newCostId,
   duplicateRecipe,
+  removeRecipe,
   removeMaterial,
   removeProcess,
   seoulToday,
@@ -1199,6 +1200,23 @@ function ProductsPanel({
           }}
         >
           이 품목 복제
+        </button>
+        <button
+          type="button"
+          className="text-sm rounded-lg border border-red-200 px-3 py-1.5 text-red-700"
+          onClick={() => {
+            if (!recipe) return;
+            const warning = recipe.legacyQuoteId
+              ? `${recipe.label} 품목은 기존 견적 계산입니다. 삭제하면 견적 화면에서도 빠집니다. `
+              : "";
+            const ok = window.confirm(`${warning}${recipe.label} 품목을 삭제할까요? 아래 저장을 눌러야 서버에서 빠집니다.`);
+            if (!ok) return;
+            const next = removeRecipe(library, recipe.productId);
+            setLibrary(next);
+            setSelected(next.recipes[0]?.productId ?? "");
+          }}
+        >
+          이 품목 삭제
         </button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
