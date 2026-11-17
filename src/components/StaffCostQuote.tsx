@@ -29,6 +29,7 @@ interface QuotePayload {
     lines?: QuoteLine[];
     costLibraryRevision?: number;
     usage?: { name: string; text: string }[];
+    details?: { materials: { name: string; text: string }[]; timeText?: string };
   };
 }
 
@@ -204,8 +205,9 @@ export function StaffCostQuote({
   const floor = result?.productMinimumSupply;
   const minimumApplied = recommended != null && floor != null && recommended === floor && (result?.targetSupplyPrice == null || result.targetSupplyPrice < floor);
   const vat = Number.isFinite(offeredPrice) ? calcVatAndTotal(offeredPrice, result?.vatRate ?? 0.1) : undefined;
-  const margin = result?.supplyCost != null && offeredPrice > 0 ? (offeredPrice - result.supplyCost) / offeredPrice : undefined;
   const admin = role === "admin";
+  const details = result?.details;
+  const hasDetails = Boolean(details && (details.materials.length > 0 || details.timeText));
   const canSave = role === "admin" && inputsReady && (payload?.stage === "ready" || payload?.stage === "review") && priceOk && (result?.missing.length ?? 0) === 0;
 
   const save = async () => {
@@ -265,6 +267,15 @@ export function StaffCostQuote({
       <p className="mt-2 text-sm text-slate-500">최종 추천 공급가 (VAT 별도)</p>
       <p className="text-4xl font-semibold tracking-tight text-slate-950">{inputsReady ? won(recommended) : "—"}</p>
       {inputsReady && (result?.usage ?? []).map((row) => <p key={row.text} className="mt-1 text-sm text-slate-700">{row.text}</p>)}
+      {inputsReady && hasDetails && (
+        <details className="mt-3 rounded-xl border border-slate-200 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-800">세부사항 보기</summary>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            {details?.materials.map((row) => <p key={`${row.name}-${row.text}`}><span className="font-medium text-slate-900">{row.name}</span> · {row.text}</p>)}
+            {details?.timeText && <p>예상 시간 {details.timeText}</p>}
+          </div>
+        </details>
+      )}
       {inputsReady && minimumApplied && <p className="mt-1 text-sm font-medium text-blue-800">최소 판매 기준을 적용했습니다.</p>}
       <label className="mt-4 block text-sm font-medium text-slate-800">실제 공급가 (VAT 별도)
         <input className="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-3 text-2xl text-slate-900" inputMode="numeric" value={offered ? Number(offered).toLocaleString("ko-KR") : ""} onChange={(e) => { setOffered(e.target.value.replace(/[^\d]/g, "")); setManual(true); setManualSpec(specKey); setConfirmedKey(""); touch(); }} />
@@ -292,22 +303,6 @@ export function StaffCostQuote({
           <button type="button" className="block font-medium text-blue-700" onClick={() => document.getElementById("product-search")?.focus()}>다른 품목 견적</button>
           <a className="block font-medium text-blue-700" href="/quotes">저장된 견적 보기</a>
         </div>
-      )}
-      {admin && inputsReady && result?.supplyCost != null && (
-        <details className="mt-4 rounded-xl border border-slate-200 p-3">
-          <summary className="cursor-pointer text-sm font-medium text-slate-800">원가 분석 보기</summary>
-          <dl className="mt-3 space-y-2 text-sm text-slate-700">
-            <div className="flex justify-between gap-3"><dt>총제작원가</dt><dd>{won(result.supplyCost)}</dd></div>
-            <div className="flex justify-between gap-3"><dt>목표 이익률</dt><dd>{result.targetRate == null ? "—" : `${Math.round(result.targetRate * 1000) / 10}%`}</dd></div>
-            <div className="flex justify-between gap-3"><dt>목표 이익률 기준</dt><dd>{won(result.targetSupplyPrice)}</dd></div>
-            <div className="flex justify-between gap-3"><dt>최소 판매금액</dt><dd>{won(result.productMinimumSupply)}</dd></div>
-            <div className="flex justify-between gap-3"><dt>예상 이익률</dt><dd>{margin == null ? "—" : `${(margin * 100).toFixed(1)}%`}</dd></div>
-          </dl>
-          {(result.lines ?? []).filter((line) => line.kind === "material").map((line) => <p key={`m-${line.name}`} className="mt-2 text-xs text-slate-500">원자재 · {line.name} {won(line.supplyCost)}</p>)}
-          {(result.lines ?? []).filter((line) => line.kind !== "material").map((line) => <p key={`p-${line.name}`} className="mt-1 text-xs text-slate-500">공정 · {line.name} {won(line.supplyCost)} {line.reason ?? ""}</p>)}
-          {margin != null && margin < 0.2 && <p className="mt-2 text-sm text-amber-800">최소 확보 이익률 20%보다 낮습니다.</p>}
-          <p className="mt-2 text-xs text-slate-500">추천 공급가는 총제작원가를 목표 이익률로 나눈 값과 최소 판매금액 중 큰 값입니다.</p>
-        </details>
       )}
     </aside>
   );

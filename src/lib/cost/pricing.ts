@@ -26,6 +26,11 @@ export interface CostLine {
   /** 원가와 별개로, 실제로 출력하는 장수 또는 미터. */
   layoutQty?: number;
   layoutUnit?: string;
+  /** 소재 규격. 금액은 넣지 않는다. */
+  spec?: string;
+  perSheet?: number;
+  sheetWidthMm?: number;
+  sheetHeightMm?: number;
   grossAmount?: number;
   supplyCost?: number;
   variableCost?: number;
@@ -453,6 +458,10 @@ export function simulatePricing(
         unitLabel: line.usage === "per-piece" ? fixedUnit : measured.unitLabel,
         layoutQty: measured.value,
         layoutUnit: measured.unitLabel,
+        spec: material.spec,
+        perSheet: measured.perSheet,
+        sheetWidthMm: material.sheetWidthMm,
+        sheetHeightMm: material.sheetHeightMm,
         grossAmount: cost.gross,
         supplyCost: cost.supply,
         variableCost: once ? 0 : cost.supply,

@@ -53,13 +53,18 @@ describe("역할별 견적 응답", () => {
       result: {
         ...full.result,
         lines: [
-          { kind: "material", name: "아트지/모조지(a4)", layoutQty: 25, layoutUnit: "장", supplyCost: 2275 },
-          { kind: "material", name: "DTF필름", layoutQty: 1.25, layoutUnit: "m", supplyCost: 1765 },
+          { kind: "material", name: "아트지/모조지(a4)", layoutQty: 25, layoutUnit: "장", spec: "a4", sheetWidthMm: 210, sheetHeightMm: 297, perSheet: 4, supplyCost: 2275 },
+          { kind: "material", name: "DTF필름", layoutQty: 1.25, layoutUnit: "m", spec: "900mm × 100m", supplyCost: 1765 },
           { kind: "process", name: "커팅", layoutQty: 25, layoutUnit: "장", supplyCost: 200 },
         ],
       },
-    }, "staff");
+    }, "staff", { secondsPerSheet: 30, minutesPerMeter: 5 });
     expect(staff.result.usage?.map((row) => row.text)).toEqual(["아트지/모조지(a4) 25장", "DTF필름 1.25m 출력"]);
+    expect(staff.result.details?.materials.map((row) => `${row.name} ${row.text}`)).toEqual([
+      "아트지/모조지(a4) A4 210×297mm · 25장 · 한 장에 4개",
+      "DTF필름 900mm × 100m · 1.25m",
+    ]);
+    expect(staff.result.details?.timeText).toBe("약 20분");
     const json = JSON.stringify(staff);
     expect(json).not.toContain("supplyCost");
     expect(json).not.toContain("2275");

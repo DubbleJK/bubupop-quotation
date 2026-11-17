@@ -48,8 +48,11 @@ export async function POST(request: NextRequest) {
       productMinimumSupply: result.productMinimumSupply,
       recommendedSupplyPrice: result.recommendedSupplyPrice,
       vatRate: result.vatRateUsed,
-      lines: result.lines.map((line) => ({ name: line.name, kind: line.kind, supplyCost: line.supplyCost, usageQty: line.usageQty, unitLabel: line.unitLabel, layoutQty: line.layoutQty, layoutUnit: line.layoutUnit, reason: line.reason, usageNote: line.usageNote })),
+      lines: result.lines.map((line) => ({ name: line.name, kind: line.kind, supplyCost: line.supplyCost, usageQty: line.usageQty, unitLabel: line.unitLabel, layoutQty: line.layoutQty, layoutUnit: line.layoutUnit, spec: line.spec, perSheet: line.perSheet, sheetWidthMm: line.sheetWidthMm, sheetHeightMm: line.sheetHeightMm, reason: line.reason, usageNote: line.usageNote })),
       costLibraryRevision: result.costLibraryRevision,
     },
-  }, role));
+  }, role, {
+    secondsPerSheet: config.settings.stickerCutSecondsPerSheet,
+    minutesPerMeter: config.settings.dtfMinutesPerM,
+  }));
 }
