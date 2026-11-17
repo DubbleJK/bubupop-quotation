@@ -15,7 +15,7 @@ import {
   upsertMargin,
 } from "@/lib/cost/library";
 import { clearBrowserDraft, parseCostLibraryDraft, readBrowserDraft, writeBrowserDraft } from "@/lib/cost/browserDraft";
-import { CATALOG_PAGE_SIZE, PROCESS_CATEGORIES, RECENT_KEY, catalogPage, linkCount, matchesQuery, pickSuggestions, rememberId, sortByNameOrRecent } from "@/lib/cost/catalog";
+import { CATALOG_PAGE_SIZE, PROCESS_CATEGORIES, RECENT_KEY, catalogPage, linkCount, matchesQuery, rememberId, sortByNameOrRecent } from "@/lib/cost/catalog";
 import { DEFAULT_MINIMUM_RATE, DEFAULT_TARGET_RATE, simulatePricing, type PricingResult, type QtyCompareRow } from "@/lib/cost/pricing";
 import { customerQuoteBlockReason, isListedOnCustomerHome } from "@/lib/cost/publicCatalog";
 import { inferPriceBasis, usageUnitPrice } from "@/lib/cost/rollPrice";
@@ -1343,7 +1343,7 @@ function ProductsPanel({
           <div className="flex flex-wrap gap-2">
             <AddLine
               label="원자재 붙이기"
-              options={activeMaterials.map((row) => ({ id: row.id, label: row.label || row.id, favorite: row.favorite }))}
+              options={activeMaterials.map((row) => ({ id: row.id, label: row.label || row.id, spec: row.spec }))}
               onAdd={(refId) => {
                 pushRecent(refId);
                 patchRecipe({
@@ -1353,7 +1353,7 @@ function ProductsPanel({
             />
             <AddLine
               label="공정 붙이기"
-              options={activeProcesses.map((row) => ({ id: row.id, label: row.label || row.id, favorite: row.favorite }))}
+              options={activeProcesses.map((row) => ({ id: row.id, label: row.label || row.id, spec: row.category }))}
               onAdd={(refId) => {
                 pushRecent(refId);
                 patchRecipe({
@@ -1920,51 +1920,39 @@ function AddLine({
   onAdd,
 }: {
   label: string;
-  options: { id: string; label: string; favorite?: boolean }[];
+  options: { id: string; label: string; spec?: string }[];
   onAdd: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const recent = readRecent();
-  const picked = pickSuggestions(options, query, recent);
-  const groups = query.trim()
-    ? [{ title: "검색 결과", rows: picked.matches }]
-    : [
-        { title: "즐겨찾기", rows: picked.favorites },
-        { title: "최근 사용", rows: picked.recent },
-      ];
+  const filtered = [...options]
+    .filter((row) => matchesQuery(row.label, row.spec ?? "", query))
+    .sort((a, b) => a.label.localeCompare(b.label, "ko"));
   return (
-    <div className="relative w-full sm:w-72">
+    <div className="w-full sm:w-80">
+      <p className="text-xs font-medium text-slate-700">{label}</p>
       <input
-        className={fieldClass}
-        placeholder={`${label} 검색`}
+        className={`${fieldClass} mt-1 w-full`}
+        placeholder="이름 검색"
         value={query}
-        onFocus={() => setOpen(true)}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onChange={(e) => setQuery(e.target.value)}
       />
-      {open && (
-        <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow">
-          {groups.every((group) => group.rows.length === 0) && (
-            <p className="p-2 text-xs text-slate-500">{query.trim() ? "없는 이름입니다." : "즐겨찾기나 최근 항목이 없습니다. 이름을 입력하세요."}</p>
-          )}
-          {groups.map((group) => group.rows.length > 0 && (
-            <div key={group.title}>
-              <p className="px-2 pt-2 text-[11px] text-slate-400">{group.title}</p>
-              {group.rows.map((row) => (
-                <button
-                  key={row.id}
-                  type="button"
-                  className="block w-full text-left px-2 py-1.5 text-sm hover:bg-slate-50"
-                  onClick={() => { onAdd(row.id); setQuery(""); setOpen(false); }}
-                >
-                  {row.favorite ? "★ " : ""}{row.label}
-                </button>
-              ))}
-            </div>
-          ))}
-          <button type="button" className="block w-full text-left px-2 py-1.5 text-xs text-slate-500" onClick={() => setOpen(false)}>닫기</button>
-        </div>
-      )}
+      <select
+        className={`${fieldClass} mt-1 w-full`}
+        value=""
+        aria-label={label}
+        onChange={(event) => {
+          if (!event.target.value) return;
+          onAdd(event.target.value);
+          setQuery("");
+        }}
+      >
+        <option value="">{filtered.length ? `등록된 ${filtered.length}개 중 선택` : "없는 이름입니다."}</option>
+        {filtered.map((row) => (
+          <option key={row.id} value={row.id}>
+            {row.label}{row.spec ? ` · ${row.spec}` : ""}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
