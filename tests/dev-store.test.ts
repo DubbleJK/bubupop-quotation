@@ -2,7 +2,7 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { costPersistence, devStoreDir, readDevJson, writeDevJson } from "../src/server/devStore";
-import { trimQuoteLog } from "../src/server/kvQuoteLog";
+import { dropQuoteEntry, trimQuoteLog, type QuoteHistoryEntry } from "../src/server/kvQuoteLog";
 import { readCostLibrary } from "../src/server/kvCostLibrary";
 
 describe("개발 저장소와 운영 저장소", () => {
@@ -28,5 +28,27 @@ describe("개발 저장소와 운영 저장소", () => {
     expect(kept).toHaveLength(200);
     expect(kept[0]).toBe(5);
     expect(kept.at(-1)).toBe(204);
+  });
+
+  it("견적 기록 삭제는 고른 한 건만 빼고 나머지는 남긴다", () => {
+    const entry = (id: string): QuoteHistoryEntry => ({
+      id,
+      createdAt: "2026-11-17T00:00:00.000Z",
+      productId: "pop",
+      input: { qty: 1 },
+      salePolicyRevision: 0,
+      costLibraryRevision: 0,
+      marginPolicyRevision: 0,
+      presentedSupplyPrice: 22730,
+      presentedVat: 2270,
+      presentedTotal: 25000,
+    });
+    const kept = dropQuoteEntry([entry("quote-a"), entry("quote-b")], "quote-a");
+    expect(kept.ok).toBe(true);
+    if (kept.ok) {
+      expect(kept.entries.map((row) => row.id)).toEqual(["quote-b"]);
+      expect(kept.entries[0]?.presentedTotal).toBe(25000);
+    }
+    expect(dropQuoteEntry([entry("quote-b")], "quote-a").ok).toBe(false);
   });
 });

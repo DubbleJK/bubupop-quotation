@@ -9,8 +9,8 @@ import type { SimulationInput } from "@/lib/cost/types";
 import { ADMIN_COOKIE_NAME, readSession } from "@/server/adminSession";
 import { readKvConfig } from "@/server/kvConfig";
 import { readCostLibrary } from "@/server/kvCostLibrary";
-import { appendQuoteLog, readQuoteLog, type QuoteHistoryEntry } from "@/server/kvQuoteLog";
-import { requireQuoteAccess } from "@/server/requireAdmin";
+import { appendQuoteLog, readQuoteLog, removeQuoteLog, type QuoteHistoryEntry } from "@/server/kvQuoteLog";
+import { requireAdmin, requireQuoteAccess } from "@/server/requireAdmin";
 
 function roleOf(request: NextRequest): "admin" | "staff" {
   return readSession(request.cookies.get(ADMIN_COOKIE_NAME)?.value)?.role === "admin" ? "admin" : "staff";
@@ -100,4 +100,21 @@ export async function POST(request: NextRequest) {
   const written = await appendQuoteLog(saving);
   if (!written.ok) return NextResponse.json({ error: written.reason }, { status: 503 });
   return NextResponse.json({ ok: true, entry: quoteEntryForRole(written.entry, roleOf(request)) });
+}
+
+export async function DELETE(request: NextRequest) {
+  const denied = requireAdmin(request);
+  if (denied) return denied;
+  let id = "";
+  try {
+    const body = (await request.json()) as { id?: string };
+    id = typeof body.id === "string" ? body.id : "";
+  } catch {
+    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  }
+  if (!id) return NextResponse.json({ error: "invalid_entry" }, { status: 400 });
+  const removed = await removeQuoteLog(id);
+  if (!removed.ok && removed.reason === "not_found") return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!removed.ok) return NextResponse.json({ error: removed.reason }, { status: 503 });
+  return NextResponse.json({ ok: true });
 }

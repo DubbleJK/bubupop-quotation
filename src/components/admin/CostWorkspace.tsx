@@ -1760,6 +1760,21 @@ function HistoryPanel({ library }: { library: CostLibrary }) {
     }[]
   >([]);
   const [note, setNote] = useState<string | null>(null);
+  const [deleteNote, setDeleteNote] = useState<string | null>(null);
+  const remove = async (id: string, label: string) => {
+    if (!window.confirm(`${label} 기록을 삭제합니다. 삭제한 견적은 되돌릴 수 없습니다.`)) return;
+    setDeleteNote(null);
+    const res = await fetch("/api/admin/quote-log", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) {
+      setDeleteNote("기록을 삭제하지 못했습니다.");
+      return;
+    }
+    setEntries((current) => current.filter((row) => row.id !== id));
+  };
   useEffect(() => {
     void (async () => {
       const res = await fetch("/api/admin/quote-log");
@@ -1778,13 +1793,19 @@ function HistoryPanel({ library }: { library: CostLibrary }) {
     <section className="space-y-3">
       <h2 className="text-sm font-semibold text-slate-800">5. 견적 기록</h2>
       {note && <p className="text-sm text-slate-600">{note}</p>}
+      {deleteNote && <p className="text-sm text-red-700">{deleteNote}</p>}
       {entries.length === 0 && <p className="text-sm text-slate-500">남긴 견적이 없습니다. 품목 조립에서 견적을 계산한 뒤 기록하면 여기에 남습니다.</p>}
       <ul className="space-y-2">
-        {entries.map((entry) => (
+        {entries.map((entry) => {
+          const label = library.recipes.find((row) => row.productId === entry.productId)?.label ?? entry.productId;
+          return (
           <li key={entry.id} className="bg-white border border-slate-200 rounded-xl p-3 text-sm">
+            <div className="flex items-start justify-between gap-3">
             <p>
-              {formatSeoulMinute(entry.createdAt)} · {library.recipes.find((row) => row.productId === entry.productId)?.label ?? entry.productId}
+              {formatSeoulMinute(entry.createdAt)} · {label}
             </p>
+            <button type="button" className="shrink-0 font-medium text-red-700" onClick={() => void remove(entry.id, label)}>삭제</button>
+            </div>
             <p>그때 제시한 공급가 {won(entry.presentedSupplyPrice)} · 부가세 {won(entry.presentedVat)} · 총액 {won(entry.presentedTotal)}</p>
             <p className="text-xs text-slate-500">
               그때 원가 {won(entry.internal?.supplyCost)} · 그때 추천가 {won(entry.internal?.recommendedSupplyPrice ?? entry.internal?.targetSupplyPrice)}
@@ -1794,7 +1815,8 @@ function HistoryPanel({ library }: { library: CostLibrary }) {
               {entry.adjustmentReason ? ` · ${entry.adjustmentReason}` : ""}
             </p>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </section>
   );

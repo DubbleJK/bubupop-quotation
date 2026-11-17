@@ -35,6 +35,7 @@ export default function QuotesPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [recalc, setRecalc] = useState<{ id: string; state: "loading" | "done" | "error"; cost?: number; recommended?: number; margin?: number; message?: string } | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
   const load = async () => {
     const session = await fetch("/api/admin/session");
@@ -77,6 +78,23 @@ export default function QuotesPage() {
       setPin("");
       await load();
     }
+  };
+
+  const remove = async (entry: Entry) => {
+    const label = String(entry.input?.label ?? entry.productId);
+    if (!window.confirm(`${label} 기록을 삭제합니다. 삭제한 견적은 되돌릴 수 없습니다.`)) return;
+    setNote(null);
+    const res = await fetch("/api/admin/quote-log", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: entry.id }),
+    });
+    if (!res.ok) {
+      setNote("기록을 삭제하지 못했습니다.");
+      return;
+    }
+    setEntries((current) => current.filter((row) => row.id !== entry.id));
+    if (openId === entry.id) setOpenId(null);
   };
 
   const requote = async (entry: Entry) => {
@@ -134,13 +152,20 @@ export default function QuotesPage() {
         )}
         <h1 className="text-2xl font-semibold text-slate-900">견적 기록</h1>
         <p className="mt-1 text-sm text-slate-500">저장된 금액은 당시 계산입니다. 다시 계산해도 원본은 바뀌지 않습니다.</p>
+        {note && <p className="mt-3 text-sm text-red-700">{note}</p>}
+        {entries.length === 0 && <p className="mt-4 text-sm text-slate-500">남긴 견적이 없습니다.</p>}
         <ul className="mt-4 space-y-3">
           {entries.map((entry) => (
             <li key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <button type="button" className="w-full text-left" onClick={() => setOpenId(openId === entry.id ? null : entry.id)}>
+              <div className="flex items-start justify-between gap-3">
+              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpenId(openId === entry.id ? null : entry.id)}>
                 <p className="font-medium text-slate-900">{String(entry.input?.label ?? entry.productId)}</p>
                 <p className="text-sm text-slate-500">{formatSeoulMinute(entry.createdAt)} · 공급가 (VAT 별도) {won(entry.presentedSupplyPrice)} · 총액 {won(entry.presentedTotal)}</p>
               </button>
+              {role === "admin" && (
+                <button type="button" className="shrink-0 text-sm font-medium text-red-700" onClick={() => void remove(entry)}>삭제</button>
+              )}
+              </div>
               {openId === entry.id && (
                 <dl className="mt-3 grid grid-cols-1 gap-1 text-sm text-slate-700 sm:grid-cols-2">
                   <div>일시 {formatSeoulMinute(entry.createdAt)}</div>

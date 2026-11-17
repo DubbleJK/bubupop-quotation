@@ -49,6 +49,14 @@ export function trimQuoteLog<T>(entries: T[], limit = QUOTE_LOG_LIMIT): T[] {
   return entries.slice(-limit);
 }
 
+export function dropQuoteEntry(
+  entries: QuoteHistoryEntry[],
+  id: string
+): { ok: true; entries: QuoteHistoryEntry[] } | { ok: false; reason: "not_found" } {
+  if (!entries.some((entry) => entry.id === id)) return { ok: false, reason: "not_found" };
+  return { ok: true, entries: entries.filter((entry) => entry.id !== id) };
+}
+
 export async function readQuoteLog(): Promise<
   | { state: "unconfigured" }
   | { state: "error" }
@@ -94,4 +102,20 @@ export async function appendQuoteLog(
   const written = await kvWriteJson(QUOTE_LOG_KEY, entries);
   if (!written.ok) return written;
   return { ok: true, entry: saved };
+}
+
+export async function removeQuoteLog(
+  id: string
+): Promise<{ ok: true } | { ok: false; reason: "unconfigured" | "error" | "forbidden" | "not_found" }> {
+  const current = await readQuoteLog();
+  if (current.state === "error") return { ok: false, reason: "error" };
+  if (current.state === "unconfigured") return { ok: false, reason: "unconfigured" };
+  const dropped = dropQuoteEntry(current.state === "ok" ? current.entries : [], id);
+  if (!dropped.ok) return dropped;
+  if (current.where === "dev-file") {
+    const written = writeDevJson(DEV_FILE, dropped.entries);
+    if (!written.ok) return { ok: false, reason: "error" };
+    return { ok: true };
+  }
+  return kvWriteJson(QUOTE_LOG_KEY, dropped.entries);
 }
