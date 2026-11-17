@@ -33,6 +33,7 @@ export default function QuotesPage() {
   const [role, setRole] = useState<"admin" | "staff" | null>(null);
   const [pin, setPin] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [sourceNote, setSourceNote] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [recalc, setRecalc] = useState<{ id: string; state: "loading" | "done" | "error"; cost?: number; recommended?: number; margin?: number; message?: string } | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -52,8 +53,15 @@ export default function QuotesPage() {
       setAuthed(false);
       return;
     }
-    const data = (await res.json()) as { entries?: Entry[] };
+    const data = (await res.json().catch(() => ({}))) as { entries?: Entry[]; source?: string };
+    if (!res.ok) {
+      setEntries([]);
+      setSourceNote("견적 기록을 읽지 못했습니다. 목록이 비어 있는 것이 아닙니다.");
+      setAuthed(true);
+      return;
+    }
     setEntries([...(data.entries ?? [])].reverse());
+    setSourceNote(data.source === "dev-file" ? "이 목록은 이 컴퓨터에만 있습니다. 운영 사이트 기록과는 따로 저장됩니다." : null);
     setAuthed(true);
   };
 
@@ -153,6 +161,7 @@ export default function QuotesPage() {
         )}
         <h1 className="text-2xl font-semibold text-slate-900">견적 기록</h1>
         <p className="mt-1 text-sm text-slate-500">저장된 금액은 당시 계산입니다. 다시 계산해도 원본은 바뀌지 않습니다.</p>
+        {sourceNote && <p className="mt-3 text-sm text-slate-600">{sourceNote}</p>}
         {note && <p className="mt-3 text-sm text-red-700">{note}</p>}
         {entries.length === 0 && <p className="mt-4 text-sm text-slate-500">남긴 견적이 없습니다.</p>}
         <ul className="mt-4 space-y-3">
@@ -175,7 +184,7 @@ export default function QuotesPage() {
                   {entry.input?.widthMm != null && entry.input?.heightMm != null && <div>규격 {entry.input.widthMm}×{entry.input.heightMm}mm</div>}
                   {entry.input?.popCut === "4" || entry.input?.popCut === "2" ? <div>규격 {entry.input.popCut}절</div> : null}
                   {entry.input?.popCut === "custom" && <div>임의 규격 4절</div>}
-                  {entry.input?.sheet != null && <div>시트 {entry.input.sheet}</div>}
+                  {entry.input?.sheet != null && <div>시트 {entry.input.sheet}{entry.input.sheets != null ? ` · ${entry.input.sheets}장` : ""}</div>}
                   {entry.input?.typeLabel != null && <div>종류 {entry.input.typeLabel}</div>}
                   {entry.input?.numberOf2XLPlus != null && <div>2XL 이상 {entry.input.numberOf2XLPlus}벌</div>}
                   {entry.input?.paperLabel != null && <div>용지 {entry.input.paperLabel}</div>}

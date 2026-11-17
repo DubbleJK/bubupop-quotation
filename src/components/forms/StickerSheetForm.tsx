@@ -85,28 +85,33 @@ export function StickerSheetForm({
   }, [a4Supply, a3Supply, bothUnavailable, items, onSummaryChange]);
 
   useEffect(() => {
-    const chosen = result?.a4 && !result.a4.disabled ? { sheet: "A4", row: result.a4 } : result?.a3 && !result.a3.disabled ? { sheet: "A3", row: result.a3 } : null;
-    if (!chosen) {
+    if (!result || bothUnavailable) {
       onRecordChange?.(null);
       return;
     }
-    const other = chosen.sheet === "A4" && result?.a3 && !result.a3.disabled
-      ? `A3 공급가 ${result.a3.supplyPrice}원, 부가세 ${result.a3.vatAndTotal.vat}원, 총액 ${result.a3.vatAndTotal.total}원`
-      : chosen.sheet === "A3" && result?.a4 && !result.a4.disabled
-        ? `A4 공급가 ${result.a4.supplyPrice}원, 부가세 ${result.a4.vatAndTotal.vat}원, 총액 ${result.a4.vatAndTotal.total}원`
-        : "";
+    const choice = (id: "A4" | "A3", row: NonNullable<typeof result>["a4"]) => ({
+      id,
+      supplyPrice: row.supplyPrice,
+      vat: row.vatAndTotal.vat,
+      total: row.vatAndTotal.total,
+      sheets: row.sheets,
+      disabled: Boolean(row.disabled),
+    });
+    const choices = [choice("A4", result.a4), choice("A3", result.a3)];
+    const first = choices.find((row) => !row.disabled) ?? choices[0];
     onRecordChange?.({
       productId: "sticker-sheet",
-      label: `스티커 시트 ${chosen.sheet}`,
-      supplyPrice: chosen.row.supplyPrice,
-      vat: chosen.row.vatAndTotal.vat,
-      total: chosen.row.vatAndTotal.total,
+      label: "스티커 시트",
+      supplyPrice: first.supplyPrice,
+      vat: first.vat,
+      total: first.total,
       qty: Number(qty),
       widthMm: Number(widthMm),
       heightMm: Number(heightMm),
-      input: { sheet: chosen.sheet, material: MATERIAL_LABELS[materialKey] ?? materialKey, ...(other ? { otherSheet: other } : {}) },
+      input: { material: MATERIAL_LABELS[materialKey] ?? materialKey },
+      choices,
     });
-  }, [result, qty, widthMm, heightMm, materialKey, onRecordChange]);
+  }, [result, bothUnavailable, qty, widthMm, heightMm, materialKey, onRecordChange]);
 
   useEffect(() => () => onRecordChange?.(null), [onRecordChange]);
 

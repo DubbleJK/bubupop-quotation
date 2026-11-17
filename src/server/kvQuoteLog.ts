@@ -39,10 +39,20 @@ function isEntry(value: unknown): value is QuoteHistoryEntry {
   return typeof row.id === "string" && typeof row.productId === "string";
 }
 
-function entriesOf(value: unknown): QuoteHistoryEntry[] | null {
-  const raw = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
-  if (!Array.isArray(raw)) return null;
-  return raw.filter(isEntry);
+export function parseQuoteLog(value: unknown): { ok: true; entries: QuoteHistoryEntry[] } | { ok: false } {
+  let raw = value;
+  for (let depth = 0; depth < 2 && typeof raw === "string"; depth += 1) {
+    try {
+      raw = JSON.parse(raw) as unknown;
+    } catch {
+      return { ok: false };
+    }
+  }
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && Array.isArray((raw as { entries?: unknown }).entries)) {
+    raw = (raw as { entries: unknown[] }).entries;
+  }
+  if (!Array.isArray(raw)) return { ok: false };
+  return { ok: true, entries: raw.filter(isEntry) };
 }
 
 export function trimQuoteLog<T>(entries: T[], limit = QUOTE_LOG_LIMIT): T[] {
@@ -66,18 +76,18 @@ export async function readQuoteLog(): Promise<
   const stored = await kvReadJson(QUOTE_LOG_KEY);
   if (stored.state === "error") return { state: "error" };
   if (stored.state === "ok") {
-    const entries = entriesOf(stored.value);
-    if (!entries) return { state: "empty", where: "kv" };
-    return { state: "ok", where: "kv", entries };
+    const parsed = parseQuoteLog(stored.value);
+    if (!parsed.ok) return { state: "error" };
+    return { state: "ok", where: "kv", entries: parsed.entries };
   }
   if (stored.state === "empty") return { state: "empty", where: "kv" };
   if (!devFileStoreEnabled()) return { state: "unconfigured" };
   const file = readDevJson(DEV_FILE);
   if (file.state === "error") return { state: "error" };
   if (file.state === "ok") {
-    const entries = entriesOf(file.value);
-    if (!entries) return { state: "empty", where: "dev-file" };
-    return { state: "ok", where: "dev-file", entries };
+    const parsed = parseQuoteLog(file.value);
+    if (!parsed.ok) return { state: "error" };
+    return { state: "ok", where: "dev-file", entries: parsed.entries };
   }
   return { state: "empty", where: "dev-file" };
 }

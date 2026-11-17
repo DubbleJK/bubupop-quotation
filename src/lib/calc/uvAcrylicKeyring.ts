@@ -2,6 +2,34 @@
  * UV 아크릴 키링 견적 계산 모듈
  * - 추후 다른 상품군 확장을 위해 규칙/구간을 상수화
  */
+import { placeOnSheet, type SheetPlacement } from "./sheet";
+
+/** 키링 판재 표시 규격. 판매가 계산에는 쓰지 않는다. */
+export const ACRYLIC_BOARD_MM = { width: 300, height: 430 } as const;
+
+export function acrylicBoardPlacement(input: {
+  width: number;
+  height: number;
+  qty: number;
+  gapMm: number;
+  trimMm: number;
+}): SheetPlacement {
+  return placeOnSheet({
+    sheetWidthMm: ACRYLIC_BOARD_MM.width,
+    sheetHeightMm: ACRYLIC_BOARD_MM.height,
+    trimMm: input.trimMm,
+    gapMm: input.gapMm,
+    itemWidthMm: input.width,
+    itemHeightMm: input.height,
+    qty: input.qty,
+    allowRotate: true,
+  });
+}
+
+export function acrylicBoardText(placement: SheetPlacement): string {
+  if (!placement.ok) return placement.error ?? "판재에 배치할 수 없습니다.";
+  return `판재 ${ACRYLIC_BOARD_MM.width}×${ACRYLIC_BOARD_MM.height}mm · 장당 ${placement.perSheet}개 배치 · 필요 판재 ${placement.sheets}장`;
+}
 export interface UvAcrylicKeyringInput {
   width: number;
   height: number;

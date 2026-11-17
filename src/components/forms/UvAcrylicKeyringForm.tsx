@@ -2,14 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  acrylicBoardPlacement,
+  acrylicBoardText,
   calculateQuote,
   uvRecordAmounts,
   type UvAcrylicKeyringQuote,
 } from "@/lib/calc/uvAcrylicKeyring";
+import type { Settings } from "@/lib/config/types";
 import type { SaleRecordSnapshot } from "../SaleQuoteRecord";
 import type { SummaryPayload } from "../StickySummary";
 
 export interface UvAcrylicKeyringFormProps {
+  settings: Pick<Settings, "trimMarginMm" | "defaultGapMm">;
   onReset: () => void;
   onSummaryChange?: (payload: SummaryPayload) => void;
   onRecordChange?: (snapshot: SaleRecordSnapshot | null) => void;
@@ -51,10 +55,11 @@ function validateInput(
   return { width: parsedWidth, height: parsedHeight, qty: parsedQty };
 }
 
-export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange }: UvAcrylicKeyringFormProps) {
+export function UvAcrylicKeyringForm({ settings, onReset, onSummaryChange, onRecordChange }: UvAcrylicKeyringFormProps) {
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [qty, setQty] = useState("");
+  const [gap, setGap] = useState(String(settings.defaultGapMm));
   const [settledSpec, setSettledSpec] = useState("");
   const [result, setResult] = useState<UvAcrylicKeyringQuote | null>(null);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -68,6 +73,19 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
     return Math.round(result.unitSupplyPrice * 1.1);
   }, [result]);
 
+  const boardText = useMemo(() => {
+    if (!result) return "";
+    const gapMm = Number(gap);
+    if (!Number.isFinite(gapMm) || gapMm < 0) return "간격을 올바르게 입력해주세요.";
+    return acrylicBoardText(acrylicBoardPlacement({
+      width: result.width,
+      height: result.height,
+      qty: result.qty,
+      gapMm,
+      trimMm: settings.trimMarginMm,
+    }));
+  }, [result, gap, settings.trimMarginMm]);
+
   const summaryItems = useMemo(() => {
     if (!result) return [];
     return [
@@ -75,10 +93,11 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
       { label: "공급가 합계", value: result.supplyTotal },
       { label: "부가세", value: result.vat },
       { label: "최종 판매가", value: result.finalPrice },
+      ...(boardText ? [{ label: boardText, value: "", plain: true }] : []),
     ];
-  }, [result]);
+  }, [result, boardText]);
 
-  const applyCalculation = useCallback((nextWidth: string, nextHeight: string, nextQty: string) => {
+  const applyCalculation = useCallback((nextWidth: string, nextHeight: string, nextQty: string, nextGap: string) => {
     const validated = validateInput(nextWidth, nextHeight, nextQty);
     if (validated == null) {
       setError(undefined);
@@ -110,12 +129,12 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
     });
 
     setResult(nextResult);
-    setSettledSpec(`${nextWidth}|${nextHeight}|${nextQty}`);
+    setSettledSpec(`${nextWidth}|${nextHeight}|${nextQty}|${nextGap}`);
     setError(undefined);
     setWarning(nextWarning);
   }, []);
 
-  const spec = `${width}|${height}|${qty}`;
+  const spec = `${width}|${height}|${qty}|${gap}`;
   const stale = Boolean(result) && settledSpec !== spec;
 
   useEffect(() => {
@@ -163,6 +182,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
       `기본 최종금액: ${formatWon(result.baseTotal)}`,
       `가격 정책: ${result.adjustmentLabel}`,
       `최종 판매가: ${formatWon(result.finalPrice)}`,
+      boardText,
     ].join("\n");
 
     try {
@@ -175,7 +195,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <label className="flex flex-col gap-1">
           <span className="text-sm font-medium text-slate-700">가로 (mm)</span>
           <input
@@ -186,7 +206,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
             onChange={(e) => {
               const next = e.target.value;
               setWidth(next);
-              if (autoCalculate) applyCalculation(next, height, qty);
+              if (autoCalculate) applyCalculation(next, height, qty, gap);
             }}
             className="w-full border border-slate-300 rounded-lg px-3 py-2"
             placeholder="예: 45"
@@ -202,7 +222,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
             onChange={(e) => {
               const next = e.target.value;
               setHeight(next);
-              if (autoCalculate) applyCalculation(width, next, qty);
+              if (autoCalculate) applyCalculation(width, next, qty, gap);
             }}
             className="w-full border border-slate-300 rounded-lg px-3 py-2"
             placeholder="예: 30"
@@ -218,10 +238,25 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
             onChange={(e) => {
               const next = e.target.value;
               setQty(next);
-              if (autoCalculate) applyCalculation(width, height, next);
+              if (autoCalculate) applyCalculation(width, height, next, gap);
             }}
             className="w-full border border-slate-300 rounded-lg px-3 py-2"
             placeholder="예: 100"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-slate-700">간격 (mm)</span>
+          <input
+            type="number"
+            min={0}
+            step="0.1"
+            value={gap}
+            onChange={(e) => {
+              const next = e.target.value;
+              setGap(next);
+              if (autoCalculate) applyCalculation(width, height, qty, next);
+            }}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2"
           />
         </label>
       </div>
@@ -229,7 +264,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => applyCalculation(width, height, qty)}
+          onClick={() => applyCalculation(width, height, qty, gap)}
           className="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-900"
         >
           견적 계산하기
@@ -241,7 +276,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
             onChange={(e) => {
               const checked = e.target.checked;
               setAutoCalculate(checked);
-              if (checked) applyCalculation(width, height, qty);
+              if (checked) applyCalculation(width, height, qty, gap);
             }}
             className="accent-slate-700"
           />
@@ -267,6 +302,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
             )}
           </p>
           <p className="text-sm text-slate-700">공급가 합계: {formatWon(result.supplyTotal)}</p>
+          {boardText && <p className="text-sm font-medium text-slate-800">{boardText}</p>}
           <p className="text-sm text-slate-700">부가세: {formatWon(result.vat)}</p>
           <div className="pt-2 border-t border-slate-200">
             <p className="text-xs text-slate-500 mb-1">최종 판매가</p>
@@ -329,6 +365,7 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange, onRecordChange 
           setWidth("");
           setHeight("");
           setQty("");
+          setGap(String(settings.defaultGapMm));
           setResult(null);
           setSettledSpec("");
           setError(undefined);

@@ -2,7 +2,7 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { costPersistence, devStoreDir, readDevJson, writeDevJson } from "../src/server/devStore";
-import { dropQuoteEntry, trimQuoteLog, type QuoteHistoryEntry } from "../src/server/kvQuoteLog";
+import { dropQuoteEntry, parseQuoteLog, trimQuoteLog, type QuoteHistoryEntry } from "../src/server/kvQuoteLog";
 import { readCostLibrary } from "../src/server/kvCostLibrary";
 
 describe("개발 저장소와 운영 저장소", () => {
@@ -50,5 +50,24 @@ describe("개발 저장소와 운영 저장소", () => {
       expect(kept.entries[0]?.presentedTotal).toBe(25000);
     }
     expect(dropQuoteEntry([entry("quote-b")], "quote-a").ok).toBe(false);
+  });
+
+  it("견적 기록이 배열이 아니면 빈 목록으로 보지 않는다", () => {
+    const row = {
+      id: "quote-a",
+      createdAt: "2026-11-18T00:00:00.000Z",
+      productId: "pop",
+      input: { qty: 1 },
+      salePolicyRevision: 0,
+      costLibraryRevision: 0,
+      marginPolicyRevision: 0,
+      presentedSupplyPrice: 1,
+      presentedVat: 0,
+      presentedTotal: 1,
+    };
+    expect(parseQuoteLog([row]).ok).toBe(true);
+    expect(parseQuoteLog(JSON.stringify(JSON.stringify([row]))).ok).toBe(true);
+    expect(parseQuoteLog({ entries: [row] }).ok).toBe(true);
+    expect(parseQuoteLog({ kept: [row] }).ok).toBe(false);
   });
 });

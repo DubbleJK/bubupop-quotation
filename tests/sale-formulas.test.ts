@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { calcPop, calcPopStandard } from "@/lib/calc/pop";
 import { calcTshirt, tshirtSizeError } from "@/lib/calc/tshirt";
 import { isLegacySaleProduct } from "@/config/products";
-import { saleRecordBody } from "@/components/SaleQuoteRecord";
-import { calculateQuote, uvRecordAmounts } from "@/lib/calc/uvAcrylicKeyring";
+import { chosenSaleRecord, saleRecordBody, type SaleRecordSnapshot } from "@/components/SaleQuoteRecord";
+import { acrylicBoardPlacement, acrylicBoardText, calculateQuote, uvRecordAmounts } from "@/lib/calc/uvAcrylicKeyring";
 import { getFileConfig } from "@/lib/config/fileConfig";
 import { currentLegacySale } from "@/lib/cost/legacySale";
 import type { LegacyQuoteId, ProductRecipe } from "@/lib/cost/types";
@@ -47,6 +47,21 @@ describe("판매가 수정", () => {
     expect(recorded.presentedTotal).toBe(25000);
     expect(isLegacySaleProduct("uv-acrylic-keyring")).toBe(true);
     expect(isLegacySaleProduct("cost-only")).toBe(false);
+    const sheet: SaleRecordSnapshot = {
+      productId: "sticker-sheet",
+      label: "스티커 시트",
+      supplyPrice: 20000,
+      vat: 2000,
+      total: 22000,
+      qty: 10,
+      choices: [
+        { id: "A4", supplyPrice: 20000, vat: 2000, total: 22000, sheets: 8 },
+        { id: "A3", supplyPrice: 25000, vat: 2500, total: 27500, sheets: 4 },
+      ],
+    };
+    expect(chosenSaleRecord(sheet, "A3")?.sheets).toBe(4);
+    expect(chosenSaleRecord(sheet, "A3")?.supplyPrice).toBe(25000);
+    expect(chosenSaleRecord(sheet, "")?.id).toBe("A4");
     const saved = currentLegacySale(config, recipe("pop"), { productId: "pop", qty: 1, popCut: "4" });
     expect(saved?.total).toBe(25000);
     expect((saved?.supplyPrice ?? 0) + (saved?.vat ?? 0)).toBe(saved?.total);
@@ -89,6 +104,11 @@ describe("판매가 수정", () => {
     const bulk = uvRecordAmounts(calculateQuote({ width: 45, height: 30, qty: 2 }));
     expect(bulk.presentedTotal).toBe(4562);
     expect(bulk.presentedVat).toBe(calculateQuote({ width: 45, height: 30, qty: 2 }).vat);
+    const board = (qty: number) => acrylicBoardPlacement({ width: 40, height: 40, qty, gapMm: 5, trimMm: s.trimMarginMm });
+    expect(board(54).perSheet).toBe(54);
+    expect(board(54).sheets).toBe(1);
+    expect(board(55).sheets).toBe(2);
+    expect(acrylicBoardText(board(55))).toBe("판재 300×430mm · 장당 54개 배치 · 필요 판재 2장");
     const saved = currentLegacySale(config, recipe("uv-acrylic-keyring"), { productId: "uv-acrylic-keyring", qty: 1, widthMm: 40, heightMm: 40 });
     expect(saved?.finalPrice).toBe(6000);
     expect((saved?.supplyPrice ?? 0) + (saved?.vat ?? 0)).toBe(6000);

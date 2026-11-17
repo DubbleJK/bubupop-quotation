@@ -3,6 +3,7 @@
 export interface SummaryItem {
   label: string;
   value: string | number;
+  plain?: boolean;
   sub?: { label: string; value: string | number }[];
 }
 
@@ -49,8 +50,14 @@ export function StickySummary({
       <ul className="space-y-1 text-sm">
         {items.map((item, i) => (
           <li key={i}>
-            <span className="text-slate-600">{item.label}:</span>{" "}
-            {typeof item.value === "number" ? formatKr(item.value) : item.value}
+            {item.plain ? (
+              <span className="text-slate-700">{item.label}</span>
+            ) : (
+              <>
+                <span className="text-slate-600">{item.label}:</span>{" "}
+                {typeof item.value === "number" ? formatKr(item.value) : item.value}
+              </>
+            )}
             {item.sub?.map((s, j) => (
               <span key={j} className="block text-xs text-slate-500 ml-2">
                 {s.label}: {typeof s.value === "number" ? formatKr(s.value) : s.value}
