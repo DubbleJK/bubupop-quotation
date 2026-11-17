@@ -16,10 +16,9 @@ import {
 import { clearBrowserDraft, parseCostLibraryDraft, readBrowserDraft, writeBrowserDraft } from "@/lib/cost/browserDraft";
 import { CATALOG_PAGE_SIZE, PROCESS_CATEGORIES, RECENT_KEY, catalogPage, linkCount, matchesQuery, pickSuggestions, rememberId, sortByNameOrRecent } from "@/lib/cost/catalog";
 import { DEFAULT_MINIMUM_RATE, DEFAULT_TARGET_RATE, simulatePricing, type PricingResult, type QtyCompareRow } from "@/lib/cost/pricing";
-import { buildPublicCatalog, customerQuoteBlockReason, isListedOnCustomerHome } from "@/lib/cost/publicCatalog";
+import { customerQuoteBlockReason, isListedOnCustomerHome } from "@/lib/cost/publicCatalog";
 import { inferPriceBasis, usageUnitPrice } from "@/lib/cost/rollPrice";
 import { quoteStage, quoteStageLabel, recipeIssues } from "@/lib/cost/recipeHealth";
-import { CustomerMenuList } from "@/components/CustomerMenuList";
 import type {
   ChargeMethod,
   CostAmount,
@@ -1379,11 +1378,6 @@ function ProductsPanel({
           )}
         </article>
       )}
-      <section className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-slate-800">견적 화면 미리보기</h3>
-        <p className="text-xs text-slate-500">지금 화면의 공개 품목만 보여 줍니다. 다른 기기에는 서버에 저장한 뒤에 반영됩니다. 매입가와 이익률은 이 목록에 없습니다.</p>
-        <CustomerMenuList catalog={buildPublicCatalog(library)} />
-      </section>
     </section>
   );
 }
