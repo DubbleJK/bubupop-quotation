@@ -8,7 +8,7 @@ import { PopForm } from "@/components/forms/PopForm";
 import { StickerSheetForm } from "@/components/forms/StickerSheetForm";
 import { StickerSolventForm } from "@/components/forms/StickerSolventForm";
 import { UvAcrylicKeyringForm } from "@/components/forms/UvAcrylicKeyringForm";
-import { SaleQuoteRecord, type SaleRecordSnapshot } from "@/components/SaleQuoteRecord";
+import { SaleQuoteRecord, type SaleRecordChoice, type SaleRecordSnapshot } from "@/components/SaleQuoteRecord";
 import { DtfForm } from "@/components/forms/DtfForm";
 import { TshirtForm } from "@/components/forms/TshirtForm";
 import { BusinessCardForm } from "@/components/forms/BusinessCardForm";
@@ -40,6 +40,7 @@ export function QuoteScreen() {
   const [pin, setPin] = useState("");
   const [loginError, setLoginError] = useState("");
   const [saleRecord, setSaleRecord] = useState<SaleRecordSnapshot | null>(null);
+  const [sheetChoice, setSheetChoice] = useState<SaleRecordChoice | null>(null);
 
   const onRole = useCallback((next: "admin" | "staff" | null) => setRole(next), []);
   const onClean = useCallback((next: boolean) => setClean(next), []);
@@ -86,10 +87,21 @@ export function QuoteScreen() {
   }, [reloadKey]);
 
   const onSummaryChange = useCallback((payload: SummaryPayload) => setSummary(payload), []);
-  const onSaleRecord = useCallback((snapshot: SaleRecordSnapshot | null) => setSaleRecord(snapshot), []);
+  const onSaleRecord = useCallback((snapshot: SaleRecordSnapshot | null) => {
+    setSaleRecord(snapshot);
+    if (!snapshot?.choices?.length) setSheetChoice(null);
+  }, []);
+  const onSheetChoice = useCallback((choice: SaleRecordChoice | null) => {
+    setSheetChoice((prev) => {
+      if (!choice) return prev ? null : prev;
+      if (prev && prev.id === choice.id && prev.supplyPrice === choice.supplyPrice) return prev;
+      return choice;
+    });
+  }, []);
   const handleProductChange = useCallback((id: string) => {
     setSummary(emptySummary);
     setSaleRecord(null);
+    setSheetChoice(null);
     setProductId(id);
     const url = new URL(window.location.href);
     url.searchParams.set("product", id);
@@ -189,8 +201,8 @@ export function QuoteScreen() {
                   </section>
                   {legacy ? (
                     <aside id="quote-result" className="lg:sticky lg:top-4">
-                      <StickySummary mainValue={summary.mainValue} mainLabel={summary.mainLabel} items={summary.items} error={summary.error} />
-                      <SaleQuoteRecord role={role} snapshot={saleRecord} />
+                      <StickySummary mainValue={sheetChoice?.supplyPrice ?? summary.mainValue} mainLabel={sheetChoice ? `${sheetChoice.id} 공급가 (VAT 미포함)` : summary.mainLabel} items={summary.items} error={summary.error} />
+                      <SaleQuoteRecord role={role} snapshot={saleRecord} onChoiceChange={onSheetChoice} />
                     </aside>
                   ) : view.result}
                 </div>

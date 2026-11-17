@@ -59,9 +59,11 @@ function won(value: number): string {
 export function SaleQuoteRecord({
   role,
   snapshot,
+  onChoiceChange,
 }: {
   role: "admin" | "staff" | null;
   snapshot: SaleRecordSnapshot | null;
+  onChoiceChange?: (choice: SaleRecordChoice | null) => void;
 }) {
   const [staffName, setStaffName] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -73,8 +75,11 @@ export function SaleQuoteRecord({
     const first = snapshot?.choices?.find((choice) => !choice.disabled);
     setChoiceId(first?.id ?? "");
   }, [snapshot]);
+  const selected = snapshot?.choices?.length ? chosenSaleRecord(snapshot, choiceId) : null;
+  useEffect(() => {
+    onChoiceChange?.(selected);
+  }, [onChoiceChange, selected]);
   if (!snapshot) return null;
-  const selected = snapshot.choices?.length ? chosenSaleRecord(snapshot, choiceId) : null;
   const supplyPrice = selected?.supplyPrice ?? snapshot.supplyPrice;
   const vat = selected?.vat ?? snapshot.vat;
   const total = selected?.total ?? snapshot.total;
