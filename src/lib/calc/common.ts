@@ -21,6 +21,20 @@ export interface VatAndTotal {
 
 export const EMPTY_VAT: VatAndTotal = { vat: 0, total: 0 };
 
+/**
+ * 부가세가 이미 포함된 최종 금액을 공급가와 부가세로 나눈다.
+ * 두 금액의 합은 최종 금액과 같다.
+ */
+export function splitIncludedTotal(total: number, vatRate: number): { supplyPrice: number; vat: number; total: number } {
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(vatRate) || vatRate < 0) {
+    return { supplyPrice: 0, vat: 0, total: 0 };
+  }
+  const supplyPrice = roundToNearest10(total / (1 + vatRate));
+  const roundedVat = roundToNearest10(supplyPrice * vatRate);
+  const vat = supplyPrice + roundedVat === total ? roundedVat : total - supplyPrice;
+  return { supplyPrice, vat, total };
+}
+
 export function calcVatAndTotal(
   supplyPrice: number,
   vatRate: number

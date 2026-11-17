@@ -1,7 +1,7 @@
 /**
  * POP: 소비 길이 계산 및 4-cut/2-cut 공급가
  */
-import { roundToNearest10, calcVatAndTotal, type VatAndTotal } from "./common";
+import { roundToNearest10, calcVatAndTotal, splitIncludedTotal, type VatAndTotal } from "./common";
 import type { Settings } from "@/lib/config/types";
 
 export interface PopInput {
@@ -25,6 +25,37 @@ export interface PopResult {
   supply2Cut: number;
   vatAndTotal4: VatAndTotal;
   vatAndTotal2: VatAndTotal;
+}
+
+/** 표준 규격 1장의 최종 금액. 디자인비와 부가세가 이미 들어 있다. */
+export const POP_STANDARD_EACH = { "4": 25000, "2": 30000 } as const;
+export type PopStandardCut = keyof typeof POP_STANDARD_EACH;
+
+export interface PopStandardResult {
+  ok: true;
+  cut: PopStandardCut;
+  label: string;
+  qty: number;
+  each: number;
+  supplyPrice: number;
+  vat: number;
+  total: number;
+}
+
+/** 4절·2절 표준 규격. 최종 금액은 장당 고정가 × 수량이며 부가세를 다시 더하지 않는다. */
+export function calcPopStandard(cut: PopStandardCut, qty: number, vatRate: number): PopStandardResult {
+  const each = POP_STANDARD_EACH[cut];
+  const money = splitIncludedTotal(each * qty, vatRate);
+  return {
+    ok: true,
+    cut,
+    label: cut === "4" ? "4절" : "2절",
+    qty,
+    each,
+    supplyPrice: money.supplyPrice,
+    vat: money.vat,
+    total: money.total,
+  };
 }
 
 export function calcPop(

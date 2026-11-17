@@ -116,8 +116,28 @@ export function getAdjustedFinalPrice(baseTotal: number, qty: number): number {
   return Math.round(baseTotal * getAdjustmentRate(qty));
 }
 
+const SINGLE_INCLUDED_TOTAL = 6000;
+
 export function calculateQuote(input: UvAcrylicKeyringInput): UvAcrylicKeyringQuote {
   const area = getArea(input.width, input.height);
+  if (input.qty === 1) {
+    const supplyTotal = Math.round(SINGLE_INCLUDED_TOTAL / (1 + VAT_RATE) / 10) * 10;
+    const vat = SINGLE_INCLUDED_TOTAL - supplyTotal;
+    return {
+      width: input.width,
+      height: input.height,
+      qty: input.qty,
+      area,
+      quantityBracket: "1개",
+      unitSupplyPrice: supplyTotal,
+      supplyTotal,
+      vat,
+      baseTotal: SINGLE_INCLUDED_TOTAL,
+      adjustmentRate: 1,
+      adjustmentLabel: "1개 부가세 포함",
+      finalPrice: SINGLE_INCLUDED_TOTAL,
+    };
+  }
   const unitSupplyPrice = getUnitSupplyPrice(area, input.qty);
   const supplyTotal = unitSupplyPrice * input.qty;
   const vat = getVat(supplyTotal);
@@ -146,7 +166,7 @@ export function calculateQuote(input: UvAcrylicKeyringInput): UvAcrylicKeyringQu
  * 요구된 5개 케이스를 상수로 남겨 수동 검증 시 즉시 비교 가능
  */
 export const UV_ACRYLIC_KEYRING_TEST_CASES = [
-  { width: 45, height: 30, qty: 1, expectedFinalPrice: 7260 },
+  { width: 45, height: 30, qty: 1, expectedFinalPrice: 6000 },
   { width: 45, height: 30, qty: 100, expectedFinalPrice: 154193 },
   { width: 47, height: 47, qty: 200, expectedFinalPrice: 318318 },
   { width: 50, height: 50, qty: 500, expectedFinalPrice: 745421 },

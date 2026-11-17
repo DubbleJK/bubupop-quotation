@@ -233,8 +233,8 @@ describe("원가 라이브러리", () => {
     const recipe = emptyCostLibrary().recipes.find((row) => row.legacyQuoteId === "uv-acrylic-keyring");
     if (!recipe) throw new Error("uv");
     const drops = scanDisplayedDrops(config, recipe);
-    expect(drops.some((row) => row.qty === 2 && row.price === 4562 && row.previous === 7260)).toBe(true);
-    expect(calculateQuote({ width: 45, height: 30, qty: 1 }).finalPrice).toBe(7260);
+    expect(drops.some((row) => row.qty === 2 && row.price === 4562 && row.previous === 6000)).toBe(true);
+    expect(calculateQuote({ width: 45, height: 30, qty: 1 }).finalPrice).toBe(6000);
     expect(calculateQuote({ width: 45, height: 30, qty: 2 }).finalPrice).toBe(4562);
   });
 

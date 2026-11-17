@@ -13,7 +13,7 @@ const s = file.settings;
 describe("결함 기록 (정상 규격이 아님)", () => {
   it("UV 45×30mm는 수량이 늘면 최종가가 줄어드는 구간이 있다", () => {
     const at = (qty: number) => calculateQuote({ width: 45, height: 30, qty }).finalPrice;
-    expect(at(1)).toBe(7260);
+    expect(at(1)).toBe(6000);
     expect(at(2)).toBe(4562);
     expect(at(2)).toBeLessThan(at(1));
     expect(at(10)).toBe(22809);
@@ -24,7 +24,7 @@ describe("결함 기록 (정상 규격이 아님)", () => {
     expect(at(101)).toBeLessThan(at(100));
   });
 
-  it("티셔츠 반팔은 9장과 10장 공급가가 같고, 50장이 49장보다 싸다", () => {
+  it("티셔츠 반팔은 수량이 늘면 공급가가 내려가지 않는다", () => {
     const type = file.tshirtTypes.find((item) => item.id === "short");
     const price = (qty: number) =>
       calcTshirt(
@@ -35,9 +35,11 @@ describe("결함 기록 (정상 규격이 아님)", () => {
         file.tshirtDiscountTiers
       ).supplyPrice;
     expect(price(9)).toBe(162000);
-    expect(price(10)).toBe(162000);
-    expect(price(49)).toBe(793800);
-    expect(price(50)).toBe(720000);
-    expect(price(50)).toBeLessThan(price(49));
+    expect(price(10)).toBe(178200);
+    expect(price(49)).toBe(810000);
+    expect(price(50)).toBe(824400);
+    expect(price(99)).toBe(1530000);
+    expect(price(100)).toBe(1543500);
+    for (let qty = 2; qty <= 120; qty += 1) expect(price(qty)).toBeGreaterThan(price(qty - 1));
   });
 });

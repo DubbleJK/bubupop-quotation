@@ -27,6 +27,7 @@ function simulationFrom(entry: Omit<QuoteHistoryEntry, "id" | "createdAt">): Sim
     productId: entry.productId,
     qty: numberOr(input.qty) ?? Number.NaN,
     widthMm: numberOr(input.widthMm),
+    popCut: input.popCut === "4" || input.popCut === "2" ? input.popCut : undefined,
     heightMm: numberOr(input.heightMm),
     gapMm: numberOr(input.gapMm),
   };

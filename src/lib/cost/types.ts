@@ -233,6 +233,8 @@ export interface SimulationInput {
   productId: string;
   qty: number;
   widthMm?: number;
+  /** POP 표준 규격. 없으면 가로·세로 임의 규격으로 계산한다. */
+  popCut?: "4" | "2";
   heightMm?: number;
   gapMm?: number;
   materialKey?: string;

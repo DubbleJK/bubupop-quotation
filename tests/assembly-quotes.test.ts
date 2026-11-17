@@ -184,7 +184,7 @@ describe("조립식 가상 견적", () => {
       }
     }
     expect(beforePop).toBe(126900);
-    expect(beforeShirt).toBe(720000);
+    expect(beforeShirt).toBe(824400);
     expect(success + fail + warning).toBe(10 * qtys.length);
     expect(success + fail + warning).toBeGreaterThanOrEqual(100);
     expect(fail).toBe(0);
@@ -213,8 +213,8 @@ describe("조립식 가상 견적", () => {
     expect(rows.find((row) => row.qty === 100)?.status).toBe("inversion");
     const shirt49 = tee ? calcTshirt({ typeId: "short", qty: 49, numberOf2XLPlus: 0 }, config.settings, tee, config.tshirtSizeUpPer2XL, config.tshirtDiscountTiers).supplyPrice : 0;
     const shirt50 = tee ? calcTshirt({ typeId: "short", qty: 50, numberOf2XLPlus: 0 }, config.settings, tee, config.tshirtSizeUpPer2XL, config.tshirtDiscountTiers).supplyPrice : 0;
-    expect(shirt49).toBe(793800);
-    expect(shirt50).toBe(720000);
+    expect(shirt49).toBe(810000);
+    expect(shirt50).toBe(824400);
   });
 
   it("원가가 없으면 추천가를 만들지 않고 빠진 이름을 보여 준다", () => {

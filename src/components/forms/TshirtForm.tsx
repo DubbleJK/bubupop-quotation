@@ -46,8 +46,14 @@ export function TshirtForm({
     () =>
       result
         ? [
-            { label: "단가", value: result.unitPrice },
-            { label: "할인율", value: `${result.discountRate * 100}%` },
+            ...result.bands.map((band) => ({
+              label: band.from === band.to
+                ? `${band.from}번째 ${band.qty}벌 · ${band.rate === 0 ? "정가" : `${band.rate * 100}% 할인`}`
+                : `${band.from}~${band.to}번째 ${band.qty}벌 · ${band.rate === 0 ? "정가" : `${band.rate * 100}% 할인`}`,
+              value: band.amount,
+            })),
+            { label: "구간 할인 합계", value: result.discountAmount },
+            ...(result.sizeUp > 0 ? [{ label: "2XL 이상 추가", value: result.sizeUp }] : []),
             { label: "공급가", value: result.supplyPrice },
             { label: "VAT(10%)", value: result.vatAndTotal.vat },
             { label: "총액", value: result.vatAndTotal.total },

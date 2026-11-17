@@ -104,10 +104,14 @@ describe("기존 정상 입력의 판매가 (코드 기본값)", () => {
       file.tshirtSizeUpPer2XL,
       file.tshirtDiscountTiers
     );
-    expect(result.discountRate).toBe(0.1);
-    expect(result.supplyPrice).toBe(167400);
-    expect(result.vatAndTotal.vat).toBe(16740);
-    expect(result.vatAndTotal.total).toBe(184140);
+    expect(result.bands.map((band) => [band.from, band.to, band.rate, band.amount])).toEqual([
+      [1, 9, 0, 162000],
+      [10, 10, 0.1, 16200],
+    ]);
+    expect(result.sizeUp).toBe(6000);
+    expect(result.supplyPrice).toBe(184200);
+    expect(result.vatAndTotal.vat).toBe(18420);
+    expect(result.vatAndTotal.total).toBe(202620);
   });
 
   it("TSH-100 후드 100장 중 2XL 10장", () => {
@@ -119,10 +123,9 @@ describe("기존 정상 입력의 판매가 (코드 기본값)", () => {
       file.tshirtSizeUpPer2XL,
       file.tshirtDiscountTiers
     );
-    expect(result.discountRate).toBe(0.25);
-    expect(result.supplyPrice).toBe(1897500);
-    expect(result.vatAndTotal.vat).toBe(189750);
-    expect(result.vatAndTotal.total).toBe(2087250);
+    expect(result.supplyPrice).toBe(2173750);
+    expect(result.vatAndTotal.vat).toBe(217380);
+    expect(result.vatAndTotal.total).toBe(2391130);
   });
 
   it("CARD-100 수입 당일제 100매 베이직", () => {

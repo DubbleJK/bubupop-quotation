@@ -2,7 +2,7 @@ import type { AppConfig } from "@/lib/config/types";
 import { calcBanner } from "@/lib/calc/banner";
 import { calcBusinessCard } from "@/lib/calc/businessCard";
 import { calcDtf } from "@/lib/calc/dtf";
-import { calcPop } from "@/lib/calc/pop";
+import { calcPop, calcPopStandard } from "@/lib/calc/pop";
 import { calcStickerSheet } from "@/lib/calc/stickerSheet";
 import { calcStickerSolvent } from "@/lib/calc/stickerSolvent";
 import { calcTshirt } from "@/lib/calc/tshirt";
@@ -39,7 +39,16 @@ export function currentLegacySale(
   if (!id) return undefined;
   const s = config.settings;
   if (id === "pop") {
-    if (!sizeReady(input)) return { label: "POP 4컷", error: "가로·세로·수량이 필요합니다." };
+    if (input.popCut === "4" || input.popCut === "2") {
+      const standard = calcPopStandard(input.popCut, input.qty, s.vatRate);
+      return {
+        label: `POP ${standard.label} 최종 금액`,
+        supplyPrice: standard.supplyPrice,
+        vat: standard.vat,
+        total: standard.total,
+      };
+    }
+    if (!sizeReady(input)) return { label: "POP 임의 규격", error: "가로·세로·수량이 필요합니다." };
     const result = calcPop({ widthMm: input.widthMm ?? 0, heightMm: input.heightMm ?? 0, qty: input.qty }, s);
     if (!result.ok) return { label: "POP 4컷", error: result.error };
     return { label: "POP 4컷 공급가", supplyPrice: result.supply4Cut, vat: result.vatAndTotal4.vat, total: result.vatAndTotal4.total };

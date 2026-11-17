@@ -133,9 +133,9 @@ describe("실전 수작업 대조", () => {
     expect(pop.target?.supplyPrice).toBeUndefined();
     expect(uv.target?.supplyPrice).toBeUndefined();
     expect(pop.current?.supplyPrice).toBe(calcPop({ widthMm: 200, heightMm: 200, qty: 10 }, config.settings).supply4Cut);
-    expect(uv.current?.finalPrice).toBe(7260);
+    expect(uv.current?.finalPrice).toBe(6000);
     expect(calcDtf({ widthMm: 100, heightMm: 100, qty: 10 }, config.settings).supplyPrice).toBe(2880);
-    expect(calculateQuote({ width: 45, height: 30, qty: 1 }).finalPrice).toBe(7260);
+    expect(calculateQuote({ width: 45, height: 30, qty: 1 }).finalPrice).toBe(6000);
   });
 
   it("롤 폭이나 간격이 없으면 길이를 지어내지 않는다", () => {

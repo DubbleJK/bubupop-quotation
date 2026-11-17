@@ -225,7 +225,11 @@ export function UvAcrylicKeyringForm({ onReset, onSummaryChange }: UvAcrylicKeyr
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
           <p className="text-sm text-slate-700">
             개당 공급가: {formatWon(result.unitSupplyPrice)}{" "}
-            {unitPriceWithVat != null && (
+            {result.qty === 1 ? (
+              <span className="font-bold text-slate-900">
+                (부가세 포함 최종 {formatWon(result.finalPrice)})
+              </span>
+            ) : unitPriceWithVat != null && (
               <span className="font-bold text-slate-900">
                 (VAT 포함 {formatWon(unitPriceWithVat)})
               </span>
